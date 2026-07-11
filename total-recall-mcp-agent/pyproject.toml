@@ -1,0 +1,17 @@
+[project]
+name = "total-recall-mcp"
+version = "0.1.0"
+description = "I'll be back with your requests..."
+readme = "README.md"
+requires-python = ">=3.14"
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "asyncpg",
+    "mcp",
+    "python-jose",
+    "boto3",
+    "pydantic-settings",
+]
