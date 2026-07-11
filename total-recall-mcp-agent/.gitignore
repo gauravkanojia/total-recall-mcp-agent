@@ -35,6 +35,12 @@ Temporary Items
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.py[cod]
 *$py.class
 
 # C extensions
