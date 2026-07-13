@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # AWS
     AWS_REGION: str = "us-east-1"
 
+    # Embeddings
+    EMBEDDING_PROVIDER: str = "fake"  # "fake" for local/tests, "bedrock" for AWS
+    EMBEDDING_MODEL_ID: str = "amazon.titan-embed-text-v2:0"
+    EMBEDDING_DIMENSIONS: int = 1024
+
     # Security: Authentication
     JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
