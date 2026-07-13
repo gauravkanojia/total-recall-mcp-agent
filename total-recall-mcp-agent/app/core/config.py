@@ -1,6 +1,10 @@
+"""
+Configuration/Settings setup class for the MCP Server
+"""
+
 from functools import lru_cache
 
-from pydantic import Field
+# from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,12 +21,26 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
 
-    # Server 
+    # Server
     HOST: str = "0.0.0.0"
     PORT: int = 4646
 
+    # MCP transport: "stdio" for local/CLI clients (Cursor, Claude Desktop),
+    # "streamable-http" (or "sse") when served over HTTP, e.g. via app.main
+    # in a container/ECS task.
+    MCP_TRANSPORT: str = "stdio"
+
     # Database
-    DATABASE_URL: str = Field(default="")
+    DATABASE_URL: str
+    DATABASE_NAME: str
+    # DB_HOST: str
+    DB_PORT: int = 26257
+    # DB_NAME: str
+    # DB_USER: str
+    # DB_PASSWORD: str
+
+    # SQLAlchemy
+    DATABASE_ECHO: bool = False
 
     # AWS
     AWS_REGION: str = "us-east-1"
@@ -36,6 +54,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=".env",
+        env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
     )

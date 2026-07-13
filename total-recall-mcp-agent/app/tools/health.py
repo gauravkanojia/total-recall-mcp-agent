@@ -1,17 +1,29 @@
-from mcp.server.fastmcp import FastMCP
+"""
+Health MCP tools.
+"""
+
+from app.mcp.executor import executor
 
 
-def register_health_tools(
-    mcp: FastMCP,
-) -> None:
+async def health_check(
+    context=None,
+) -> dict:
     """
-    Register health-related MCP tools.
+    Internal health handler.
     """
 
-    @mcp.tool()
-    async def health() -> dict:
-        """
-        Check MCP server health.
-        """
+    return {
+        "status": "healthy",
+        "service": "total-recall-mcp-agent",
+    }
 
-        return {"status": "MCP server is healthy"}
+
+def register_health_tools() -> None:
+    """
+    Register health tools.
+    """
+
+    executor.register(
+        "health_check",
+        health_check,
+    )

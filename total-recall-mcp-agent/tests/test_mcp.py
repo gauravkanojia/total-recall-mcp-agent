@@ -1,16 +1,13 @@
-"""
-Test bootstrapping for MCP Server
-"""
-
 from app.mcp.registry import register_tools
 from app.mcp.server import get_mcp_server
 
 
-def test_mcp_server_creation():
+def test_mcp_server():
     """
-    Test creation of MCP Server
+    Testing MCP Server bootstrap
     """
     server = get_mcp_server()
+
     register_tools()
 
     assert server is not None

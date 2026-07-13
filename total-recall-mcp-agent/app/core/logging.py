@@ -1,19 +1,14 @@
+"""
+Setup Logger functionality for the MCP Server
+"""
+
 import logging
 import sys
-from datetime import datetime
-from zoneinfo import ZoneInfo
+
 import structlog
 
 from app.core.config import settings
-
-
-def timezone_stamper(logger, log_method, event_dict):
-    # Set your target timezone
-    tz = ZoneInfo("America/New_York")
-
-    # Generate the aware datetime and format it as ISO 8601
-    event_dict["timestamp"] = datetime.now(tz).isoformat()
-    return event_dict
+from app.tools.utils import get_timezone_stamper
 
 
 def setup_logging() -> None:
@@ -31,8 +26,8 @@ def setup_logging() -> None:
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            timezone_stamper,
+            # structlog.processors.TimeStamper(fmt="iso"),
+            get_timezone_stamper,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.dev.ConsoleRenderer(pad_event_to=0),
