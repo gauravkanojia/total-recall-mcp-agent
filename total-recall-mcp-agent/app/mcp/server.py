@@ -3,6 +3,7 @@ MCP Server bootstrap.
 """
 
 from mcp.server.fastmcp import FastMCP
+
 from app.core.logging import logger
 
 mcp_server = FastMCP(

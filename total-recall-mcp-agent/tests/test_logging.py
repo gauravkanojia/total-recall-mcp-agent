@@ -3,6 +3,7 @@ Test Logging Configuration
 """
 
 import structlog
+
 from app.core.logging import setup_logging
 
 

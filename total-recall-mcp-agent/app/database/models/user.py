@@ -2,15 +2,10 @@
 User DB Model for the MCP Server
 """
 
-from sqlalchemy import Boolean
-from sqlalchemy import String
-from sqlalchemy import text
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy import Boolean, String, text
+from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database.models.base import Base
-from app.database.models.base import TimestampMixin
-from app.database.models.base import UUIDMixin
+from app.database.models.base import Base, TimestampMixin, UUIDMixin
 
 
 class User(

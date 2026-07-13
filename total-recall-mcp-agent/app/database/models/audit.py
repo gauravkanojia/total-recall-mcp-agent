@@ -2,14 +2,10 @@
 Audit log model.
 """
 
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from sqlalchemy import String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database.models.base import Base
-from app.database.models.base import UUIDMixin
-from app.database.models.base import TimestampMixin
+from app.database.models.base import Base, TimestampMixin, UUIDMixin
 
 
 class AuditLog(

@@ -1,5 +1,5 @@
 from app.mcp.context import MCPContext
-from app.mcp.context_manager import get_context
+from app.mcp.context_manager import clear_context, get_context, set_context
 
 
 def test_mcp_context_creation():
@@ -26,10 +26,13 @@ def test_mcp_context_metadata():
         "test",
     )
 
-    current = get_context()
+    token = set_context(context)
+    try:
+        current = get_context()
 
-    assert current is not None
-    assert current.request_id == "test-request"
-    assert current.user_email == "test@example.com"
-    assert context.metadata["source"] == "test"
-    # assert token is True
+        assert current is not None
+        assert current.request_id == "test-request"
+        assert current.user_email == "test@example.com"
+        assert context.metadata["source"] == "test"
+    finally:
+        clear_context(token)

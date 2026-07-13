@@ -4,11 +4,13 @@ Database seed script.
 
 import asyncio
 
-from app.database.session import session_factory
 from app.database.models.user import User
+from app.database.session import get_session_factory
 
 
 async def seed_users():
+
+    session_factory = get_session_factory()
 
     async with session_factory() as session:
         existing = await session.execute(
