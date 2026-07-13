@@ -1,7 +1,14 @@
+"""
+Test Settings Configuration
+"""
+
 from app.core.config import settings
 
 
-def test_settings():
+def test_settings_are_loaded():
+    """
+    beta
+    """
     print(settings.APP_NAME)
     print(settings.PORT)
     print(settings.ENVIRONMENT)

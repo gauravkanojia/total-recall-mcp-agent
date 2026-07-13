@@ -1,19 +1,17 @@
-# register tools
+"""
+MCP tool registry.
 
-# health
-# users
-# sql
-
-from mcp.server.fastmcp import FastMCP
+All MCP tools are registered here.
+"""
 
 from app.tools.health import register_health_tools
+from app.tools.users import register_user_tools
 
 
-def register_tools(
-    mcp: FastMCP,
-) -> None:
+def register_tools() -> None:
     """
     Register all MCP tools.
     """
 
-    register_health_tools(mcp)
+    register_health_tools()
+    register_user_tools()

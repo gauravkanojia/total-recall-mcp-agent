@@ -1,5 +1,9 @@
-from app.mcp.server import create_mcp_server
+"""
+MCP package.
+"""
+
+from app.mcp.context import MCPContext
 
 __all__ = [
-    "create_mcp_server",
+    "MCPContext",
 ]
