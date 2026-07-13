@@ -1,7 +1,7 @@
 [project]
 name = "total-recall-mcp"
 version = "0.1.0"
-description = "I'll be back with your requests..."
+description = "[I'll be back] with responses for your requests..."
 readme = "README.md"
 requires-python = ">=3.14"
 
@@ -17,6 +17,8 @@ dependencies = [
     "alembic>=1.18.5",
     "structlog>=26.1.0",
     "python-dotenv>=1.2.2",
+    "greenlet>=3.5.3",
+    "sqlalchemy-cockroachdb>=2.0.4",
 ]
 
 [dependency-groups]
@@ -31,3 +33,12 @@ dev = [
 pythonpath = [
     "."
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["app*"]
