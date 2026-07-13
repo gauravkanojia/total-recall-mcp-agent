@@ -26,12 +26,15 @@ bootstrap path (`app/bootstrap.py`), so they can never drift out of sync:
 │   │   └── mcp_auth.py         # MCP token/principal validation (Cognito JWT, to be wired up)
 │   ├── bootstrap.py            # Registers MCP tools once; shared by cli.py and main.py
 │   ├── cli.py                  # stdio entry point (uv run total-recall-mcp)
+│   ├── clients
+│   │   ├── aws.py              # Bedrock runtime client factory
+│   │   └── embeddings.py       # Fake + Bedrock embedding providers
 │   ├── core
 │   │   ├── config.py           # Settings (env-driven)
 │   │   └── logging.py          # structlog setup
 │   ├── database
 │   │   ├── database.py         # Async SQLAlchemy engine (CockroachDB)
-│   │   ├── models/              # ORM models: User, AuditLog
+│   │   ├── models/              # ORM models: User, AuditLog, Memory
 │   │   └── session.py          # Session factory / context manager
 │   ├── main.py                 # ASGI entry point (Streamable HTTP, for Docker/ECS)
 │   ├── mcp
@@ -42,10 +45,10 @@ bootstrap path (`app/bootstrap.py`), so they can never drift out of sync:
 │   │   ├── middleware.py       # Builds an MCPContext per tool call
 │   │   ├── registry.py         # Registers internal tool handlers with the executor
 │   │   └── server.py           # FastMCP server instance
-│   ├── repositories/           # DB access: UserRepository, AuditRepository
+│   ├── repositories/           # DB access: UserRepository, AuditRepository, MemoryRepository
 │   ├── schemas/                # Pydantic I/O schemas
-│   ├── services/                # Business logic (UserService, ...)
-│   └── tools/                  # Tool handlers registered with the executor
+│   ├── services/                # Business logic (UserService, MemoryService, ...)
+│   └── tools/                  # Tool handlers: health, users, memory
 ├── docker-compose.yml           # Local single-node CockroachDB
 ├── Dockerfile
 ├── LICENSE
@@ -58,11 +61,33 @@ bootstrap path (`app/bootstrap.py`), so they can never drift out of sync:
 └── tests/
 ```
 
-> Note: `app/clients/`, `app/dependencies/`, `app/middleware/`, and
+> Note: `app/dependencies/`, `app/middleware/`, and
 > `app/auth/{cognito,dependencies,jwt}.py` currently exist as empty
 > placeholders for future work (Cognito auth wiring, request-id/logging
-> middleware, DI helpers). They aren't imported anywhere yet — see the
-> "Suggested cleanups" notes shared alongside this README for options.
+> middleware, DI helpers). They aren't imported anywhere yet.
+
+### Semantic memory (CockroachDB Vector Indexing)
+
+The agent stores long-term semantic memory in a `memories` table backed by
+CockroachDB's native `VECTOR` type and a **Distributed Vector Index**
+(`memories_vector_idx` with `cognito_sub` as a prefix column for per-user search).
+
+**MCP tools:**
+- `remember_memory(content, kind="fact", metadata=None)` — embed and persist a memory
+- `recall_memory(query, kind=None, limit=5)` — cosine-similarity search over stored memories
+
+**Embedding providers** (configured via `.env`):
+- `EMBEDDING_PROVIDER=fake` — deterministic local embeddings (default, no AWS needed)
+- `EMBEDDING_PROVIDER=bedrock` — Amazon Titan Text Embeddings V2 via Bedrock Runtime
+
+```env
+EMBEDDING_PROVIDER=fake
+EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0
+EMBEDDING_DIMENSIONS=1024
+```
+
+For production on AWS, set `EMBEDDING_PROVIDER=bedrock` and ensure the ECS task
+role has `bedrock:InvokeModel` permission for `amazon.titan-embed-text-v2:0`.
 
 ### How to run the MCP server
 
