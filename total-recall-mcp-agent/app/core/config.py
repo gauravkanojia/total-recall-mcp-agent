@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 4646
 
+    # MCP transport: "stdio" for local/CLI clients (Cursor, Claude Desktop),
+    # "streamable-http" (or "sse") when served over HTTP, e.g. via app.main
+    # in a container/ECS task.
+    MCP_TRANSPORT: str = "stdio"
+
     # Database
     DATABASE_URL: str
     DATABASE_NAME: str

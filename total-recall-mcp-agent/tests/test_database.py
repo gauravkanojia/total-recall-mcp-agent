@@ -3,6 +3,7 @@ Test DB Engine creation
 """
 
 from sqlalchemy.ext.asyncio import AsyncEngine
+
 from app.database.database import get_engine
 
 

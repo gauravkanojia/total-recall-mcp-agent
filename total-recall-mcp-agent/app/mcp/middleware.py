@@ -4,18 +4,19 @@ MCP middleware utilities.
 Handles MCP's Cross-cutting lifecycle concerns around MCP tool execution.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from uuid import uuid4
-from app.mcp.context import MCPContext
+
 from app.auth.mcp_auth import validate_mcp_token
 from app.database.session import get_session_factory
+from app.mcp.context import MCPContext
 
 
 @asynccontextmanager
 async def mcp_context_manager(
     token: str | None = None,
-) -> AsyncGenerator[MCPContext, None]:
+) -> AsyncGenerator[MCPContext]:
     """
     Create and manage MCP execution context.
     """

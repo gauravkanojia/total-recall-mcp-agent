@@ -4,10 +4,11 @@ Setup Logger functionality for the MCP Server
 
 import logging
 import sys
+
 import structlog
 
-from app.tools.utils import get_timezone_stamper
 from app.core.config import settings
+from app.tools.utils import get_timezone_stamper
 
 
 def setup_logging() -> None:

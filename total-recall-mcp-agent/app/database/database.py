@@ -3,8 +3,10 @@ Get DB Engine using SQLAlchemy
 """
 
 from functools import lru_cache
-from sqlalchemy.pool import NullPool
+
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
+
 from app.core.config import settings
 from app.core.logging import logger
 

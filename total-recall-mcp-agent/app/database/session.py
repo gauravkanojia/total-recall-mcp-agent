@@ -4,7 +4,9 @@ Database Session Manager for the MCP Server's Cockroach DB
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from app.database.database import get_engine
 
 
@@ -20,7 +22,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 @asynccontextmanager
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     """
     Provide a database session.
     """
