@@ -6,7 +6,13 @@ to internal executor tools.
 """
 
 from app.mcp.executor import executor
-from app.mcp.server import mcp_server
+from app.mcp.server import get_mcp_server
+
+
+async def _execute_tool(name: str, **kwargs):
+    """Run an internal tool handler."""
+
+    return await executor.execute(name, **kwargs)
 
 
 def register_mcp_tools() -> None:
@@ -14,18 +20,17 @@ def register_mcp_tools() -> None:
     Register public MCP tools.
     """
 
+    mcp_server = get_mcp_server()
+
     @mcp_server.tool()
     async def health_check() -> dict:
-        return await executor.execute(
-            "health_check",
-        )
+        return await _execute_tool("health_check")
 
     @mcp_server.tool()
     async def get_user(
         email: str,
     ) -> dict | None:
-
-        return await executor.execute(
+        return await _execute_tool(
             "get_user",
             email=email,
         )
@@ -36,7 +41,7 @@ def register_mcp_tools() -> None:
         kind: str = "fact",
         metadata: dict | None = None,
     ) -> dict:
-        return await executor.execute(
+        return await _execute_tool(
             "remember_memory",
             content=content,
             kind=kind,
@@ -49,7 +54,7 @@ def register_mcp_tools() -> None:
         kind: str | None = None,
         limit: int = 5,
     ) -> list[dict]:
-        return await executor.execute(
+        return await _execute_tool(
             "recall_memory",
             query=query,
             kind=kind,

@@ -30,7 +30,8 @@ class AuditLog(
         index=True,
     )
 
-    cognito_sub: Mapped[str | None] = mapped_column(
+    principal_id: Mapped[str | None] = mapped_column(
+        "cognito_sub",
         String(255),
         nullable=True,
     )
@@ -44,16 +45,3 @@ class AuditLog(
         Text,
         nullable=True,
     )
-
-    # created_at: Mapped[datetime] = mapped_column(
-    #     DateTime(timezone=True),
-    #     default=lambda: datetime.now(UTC),
-    #     nullable=False,
-    # )
-
-    # updated_at: Mapped[datetime] = mapped_column(
-    #     DateTime(timezone=True),
-    #     default=lambda: datetime.now(UTC),
-    #     onupdate=lambda: datetime.now(UTC),
-    #     nullable=False,
-    # )

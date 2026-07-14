@@ -19,7 +19,7 @@ class MemoryRepository:
     async def create(
         self,
         *,
-        cognito_sub: str | None,
+        principal_id: str,
         kind: str,
         content: str,
         metadata: dict | None,
@@ -30,7 +30,7 @@ class MemoryRepository:
         """
 
         memory = Memory(
-            cognito_sub=cognito_sub,
+            principal_id=principal_id,
             kind=kind,
             content=content,
             metadata_=metadata,
@@ -46,7 +46,7 @@ class MemoryRepository:
     async def search_similar(
         self,
         *,
-        cognito_sub: str | None,
+        principal_id: str,
         query_embedding: list[float],
         kind: str | None = None,
         limit: int = 5,
@@ -59,7 +59,7 @@ class MemoryRepository:
 
         statement = (
             select(Memory, distance)
-            .where(Memory.cognito_sub == cognito_sub)
+            .where(Memory.principal_id == principal_id)
             .order_by(distance)
             .limit(limit)
         )

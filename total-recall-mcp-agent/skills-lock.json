@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "cockroachdb-sql": {
+      "source": "cockroachlabs/cockroachdb-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cockroachdb-query-and-schema-design/cockroachdb-sql/SKILL.md",
+      "computedHash": "7451939bac73bb0d36a71c119f7283a6f7131067ed3c0d4d8e0c12f0dcac1e8a"
+    },
+    "configuring-audit-logging": {
+      "source": "cockroachlabs/cockroachdb-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cockroachdb-security-and-governance/configuring-audit-logging/SKILL.md",
+      "computedHash": "074b122fd141e6f255bcf628f8e043376a1a8c77dbdc43645a754eac178458d4"
+    },
+    "designing-application-transactions": {
+      "source": "cockroachlabs/cockroachdb-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cockroachdb-application-development/designing-application-transactions/SKILL.md",
+      "computedHash": "ec22ca0448e2b34578bf141f182b6150a3ad773fde39ab0ae797ed4958012b82"
+    },
+    "reviewing-cluster-health": {
+      "source": "cockroachlabs/cockroachdb-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cockroachdb-operations-and-lifecycle/reviewing-cluster-health/SKILL.md",
+      "computedHash": "8eda708888a73d0ee5ee44d107730c0537906107110b96fe85a6c1dde0e82807"
+    },
+    "setting-up-local-cluster": {
+      "source": "cockroachlabs/cockroachdb-skills",
+      "sourceType": "github",
+      "skillPath": "skills/cockroachdb-onboarding-and-migrations/setting-up-local-cluster/SKILL.md",
+      "computedHash": "d05b148fe8ecfbea8577710383ce1f80312a97434c5d74bce8f381336034cf1a"
+    }
+  }
+}

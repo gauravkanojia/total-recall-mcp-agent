@@ -5,11 +5,13 @@ MCP tool execution abstraction.
 from collections.abc import Callable
 from typing import Any
 
-from app.mcp.middleware import mcp_context_manager
+from app.mcp.session_context import mcp_session_context
 from app.repositories.audit_repository import AuditRepository
 
 
 class MCPToolExecutor:
+    """Register and run MCP tool handlers inside an audited DB context."""
+
     def __init__(self):
         self._tools: dict[str, Callable] = {}
 
@@ -24,28 +26,29 @@ class MCPToolExecutor:
         self._tools[name] = handler
 
     def clear(self) -> None:
+        """Remove all registered tool handlers."""
+
         self._tools.clear()
 
     async def execute(
         self,
         name: str,
-        *,
-        token=None,
         **kwargs,
     ) -> Any:
+        """Run a registered tool handler and commit or roll back the DB session."""
 
         if name not in self._tools:
             raise ValueError(f"Unknown MCP tool: {name}")
 
         handler = self._tools[name]
 
-        async with mcp_context_manager(token=token) as context:
+        async with mcp_session_context() as context:
             audit = AuditRepository(context.db_session)
 
             await audit.create(
                 tool_name=name,
                 request_id=context.request_id,
-                cognito_sub=context.cognito_sub,
+                principal_id=context.principal_id,
                 status="STARTED",
                 error_message=None,
             )
@@ -62,7 +65,7 @@ class MCPToolExecutor:
                 await audit.create(
                     tool_name=name,
                     request_id=context.request_id,
-                    cognito_sub=context.cognito_sub,
+                    principal_id=context.principal_id,
                     status="FAILED",
                     error_message=str(exc),
                 )

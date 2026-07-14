@@ -14,7 +14,7 @@ class AuditRepository:
         *,
         tool_name: str,
         request_id: str,
-        cognito_sub: str | None,
+        principal_id: str | None,
         status: str,
         error_message: str,
     ):
@@ -22,7 +22,7 @@ class AuditRepository:
         audit = AuditLog(
             tool_name=tool_name,
             request_id=request_id,
-            cognito_sub=cognito_sub,
+            principal_id=principal_id,
             status=status,
             error_message=error_message,
         )

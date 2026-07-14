@@ -1,18 +1,24 @@
 {
   "mcpServers": {
-    "total-recall-mcp": {
+    "total-recall-mcp-agent": {
       "command": "uv",
       "args": [
         "run",
         "--frozen",
         "--directory",
         "{ENV:HOME}/cockroachdb-aws-hackathon-aug-2026/total-recall-mcp-agent",
-        "total-recall-mcp"
+        "total-recall-mcp-agent"
       ],
       "env": {
         "DATABASE_URL": "cockroachdb+asyncpg://root@localhost:26257/total_recall_mcp_db",
         "DATABASE_NAME": "total_recall_mcp_db",
         "EMBEDDING_PROVIDER": "fake"
+      }
+    },
+    "cockroachdb-cloud": {
+      "url": "https://cockroachlabs.cloud/mcp",
+      "headers": {
+        "Authorization": "Bearer <COCKROACH_CLOUD_MCP_TOKEN>"
       }
     }
   }

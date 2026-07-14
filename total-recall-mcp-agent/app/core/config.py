@@ -26,8 +26,7 @@ class Settings(BaseSettings):
     PORT: int = 4646
 
     # MCP transport: "stdio" for local/CLI clients (Cursor, Claude Desktop),
-    # "streamable-http" (or "sse") when served over HTTP, e.g. via app.main
-    # in a container/ECS task.
+    # "streamable-http" (or "sse") when served over HTTP via app.cli.
     MCP_TRANSPORT: str = "stdio"
 
     # Database
@@ -49,10 +48,6 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "fake"  # "fake" for local/tests, "bedrock" for AWS
     EMBEDDING_MODEL_ID: str = "amazon.titan-embed-text-v2:0"
     EMBEDDING_DIMENSIONS: int = 1024
-
-    # Security: Authentication
-    JWT_SECRET: str = ""
-    JWT_ALGORITHM: str = "HS256"
 
     # Logging
     LOG_LEVEL: str = "INFO"

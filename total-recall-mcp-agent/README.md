@@ -1,156 +1,184 @@
 # cockroachdb-aws-hackathon-aug-2026
-Codebase for CockroachDB × AWS Hackathon – Build the Future of Agentic Memory (the “Hackathon”): https://cockroachdb-ai.devpost.com
+
+Codebase for CockroachDB × AWS Hackathon – Build the Future of Agentic Memory: https://cockroachdb-ai.devpost.com
+
+> **Holistic project overview** (architecture, all CockroachDB + AWS components, hackathon compliance): see the [repository root README](../README.md).
 
 ## Overview
 
-`total-recall-mcp` is an MCP (Model Context Protocol) agent that uses CockroachDB
-as its persistent memory layer: every tool call is executed inside a database
-transaction and written to an `audit_logs` table, giving the agent a durable,
-queryable record of what it did, when, and for whom.
+`total-recall-mcp-agent` is an MCP (Model Context Protocol) agent that uses CockroachDB
+as its persistent memory layer: every tool call runs inside a database transaction
+and is written to `audit_logs`, while semantic memories live in a `memories` table
+with a distributed vector index.
 
-The same set of MCP tools is served through two entry points that share one
-bootstrap path (`app/bootstrap.py`), so they can never drift out of sync:
+Two entry points share one bootstrap path (`app/bootstrap.py`):
 
-- **`app/cli.py`** – a standalone stdio process for local MCP clients
-  (Cursor, Claude Desktop, etc.).
-- **`app/main.py`** – a FastAPI/ASGI app that exposes the same tools over
-  Streamable HTTP (`/mcp`) for containerized deployments (Docker/ECS on AWS).
+- **`app/cli.py`** — stdio MCP server for Cursor / Claude Desktop (default)
+- **`app/cli.py --transport streamable-http`** — Streamable HTTP (`/mcp`, `/health`) for Docker / ECS on AWS
 
-### Project Structure
+### Hackathon tools used (≥2 required)
+
+| Tool | How we use it |
+|---|---|
+| **CockroachDB Distributed Vector Indexing** | `memories` table with `VECTOR(1024)` + `CREATE VECTOR INDEX` for `remember_memory` / `recall_memory` |
+| **CockroachDB Cloud Managed MCP Server** | Read-only cluster access from Cursor via `app/mcp-cloud.example.json` |
+| **ccloud CLI (Agent-Ready)** | `scripts/ccloud_cluster_info.sh` — JSON cluster metadata for agents/ops |
+| **CockroachDB Agent Skills (Open Source)** | Curated skills from [cockroachlabs/cockroachdb-skills](https://github.com/cockroachlabs/cockroachdb-skills) in `.agents/skills/` + project skill `total-recall-agentic-memory` |
+
+### CockroachDB Agent Skills
+
+This project uses the open-source [CockroachDB Agent Skills](https://github.com/cockroachlabs/cockroachdb-skills) ecosystem so Cursor agents have production-grade CockroachDB expertise.
+
+**Installed skills** (`.agents/skills/`):
+
+| Skill | Use in this project |
+|---|---|
+| `total-recall-agentic-memory` | Project-specific: vector memory schema, MCP tools, scripts |
+| `cockroachdb-sql` | Schema design, vector DDL, query patterns |
+| `setting-up-local-cluster` | Local CockroachDB dev environment |
+| `reviewing-cluster-health` | CockroachDB Cloud cluster diagnostics |
+| `designing-application-transactions` | Transaction patterns for audit + memory writes |
+| `configuring-audit-logging` | Audit log design aligned with `audit_logs` table |
+
+**Install or refresh skills:**
 
 ```bash
-.
-├── app
-│   ├── __init__.py
-│   ├── auth
-│   │   └── mcp_auth.py         # MCP token/principal validation (Cognito JWT, to be wired up)
-│   ├── bootstrap.py            # Registers MCP tools once; shared by cli.py and main.py
-│   ├── cli.py                  # stdio entry point (uv run total-recall-mcp)
-│   ├── clients
-│   │   ├── aws.py              # Bedrock runtime client factory
-│   │   └── embeddings.py       # Fake + Bedrock embedding providers
-│   ├── core
-│   │   ├── config.py           # Settings (env-driven)
-│   │   └── logging.py          # structlog setup
-│   ├── database
-│   │   ├── database.py         # Async SQLAlchemy engine (CockroachDB)
-│   │   ├── models/              # ORM models: User, AuditLog, Memory
-│   │   └── session.py          # Session factory / context manager
-│   ├── main.py                 # ASGI entry point (Streamable HTTP, for Docker/ECS)
-│   ├── mcp
-│   │   ├── bridge.py           # Exposes internal tools as @mcp_server.tool()
-│   │   ├── context.py          # Per-request MCPContext (db session, request id, identity)
-│   │   ├── context_manager.py  # contextvar helpers for MCPContext
-│   │   ├── executor.py         # Runs a tool inside a DB transaction + writes an audit row
-│   │   ├── middleware.py       # Builds an MCPContext per tool call
-│   │   ├── registry.py         # Registers internal tool handlers with the executor
-│   │   └── server.py           # FastMCP server instance
-│   ├── repositories/           # DB access: UserRepository, AuditRepository, MemoryRepository
-│   ├── schemas/                # Pydantic I/O schemas
-│   ├── services/                # Business logic (UserService, MemoryService, ...)
-│   └── tools/                  # Tool handlers: health, users, memory
-├── docker-compose.yml           # Local single-node CockroachDB
-├── Dockerfile
-├── LICENSE
-├── migrations/                  # Alembic migrations
-├── pyproject.toml
-├── README.md
-├── scripts/
-│   └── seed.py                 # Seeds a test user
-├── terraform/                   # AWS deployment (ECS, network, IAM, secrets)
-└── tests/
+./scripts/install_cockroachdb_skills.sh          # curated subset (default)
+./scripts/install_cockroachdb_skills.sh --all    # all 34 upstream skills
 ```
 
-> Note: `app/dependencies/`, `app/middleware/`, and
-> `app/auth/{cognito,dependencies,jwt}.py` currently exist as empty
-> placeholders for future work (Cognito auth wiring, request-id/logging
-> middleware, DI helpers). They aren't imported anywhere yet.
+Requires Node.js 18+ (`npx`). Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
-### Semantic memory (CockroachDB Vector Indexing)
+### AWS services used (≥1 required)
 
-The agent stores long-term semantic memory in a `memories` table backed by
-CockroachDB's native `VECTOR` type and a **Distributed Vector Index**
-(`memories_vector_idx` with `cognito_sub` as a prefix column for per-user search).
+| AWS Service | Role in this agent |
+|---|---|
+| **Amazon Bedrock** | Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`) generates vectors for `remember_memory` / `recall_memory` in production (`EMBEDDING_PROVIDER=bedrock`) |
+| **Amazon ECS (Fargate)** | Hosts the containerized MCP agent (`total-recall-mcp-agent --transport streamable-http`) behind an ALB — see `terraform/modules/ecs/` |
+| **Application Load Balancer** | Public HTTP endpoint for `/health` and `/mcp` (Streamable HTTP transport) |
+| **AWS Secrets Manager** | Stores `DATABASE_URL` for the ECS task |
+| **Amazon CloudWatch Logs** | ECS task logs for observability |
+| **AWS IAM** | Task execution role + Bedrock `InvokeModel` permission on the task role |
 
-**MCP tools:**
-- `remember_memory(content, kind="fact", metadata=None)` — embed and persist a memory
-- `recall_memory(query, kind=None, limit=5)` — cosine-similarity search over stored memories
+**Architecture (production):** Cursor/client → ALB → ECS Fargate → Bedrock (embeddings) + CockroachDB (memory/audit/vectors)
 
-**Embedding providers** (configured via `.env`):
-- `EMBEDDING_PROVIDER=fake` — deterministic local embeddings (default, no AWS needed)
-- `EMBEDDING_PROVIDER=bedrock` — Amazon Titan Text Embeddings V2 via Bedrock Runtime
+Local dev uses `EMBEDDING_PROVIDER=fake` so you can develop without AWS credentials; production/terraform defaults to `bedrock`.
+
+### Semantic memory
+
+- `remember_memory(content, kind="fact", metadata=None)` — embed and persist
+- `recall_memory(query, kind=None, limit=5)` — cosine search via vector index
 
 ```env
-EMBEDDING_PROVIDER=fake
+EMBEDDING_PROVIDER=fake          # local dev
+EMBEDDING_PROVIDER=bedrock       # AWS production
 EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0
 EMBEDDING_DIMENSIONS=1024
 ```
 
-For production on AWS, set `EMBEDDING_PROVIDER=bedrock` and ensure the ECS task
-role has `bedrock:InvokeModel` permission for `amazon.titan-embed-text-v2:0`.
-
-### How to run the MCP server
+## Quick start (local)
 
 ```bash
 cd total-recall-mcp-agent
-
-# 1. Start a local CockroachDB node
-docker compose up -d
-
-# 2. Copy the example env and adjust as needed
 cp app/.env.example .env
-
-# 3. Sync dependencies
 uv sync
-
-# 4. Apply migrations
+docker compose up -d cockroach          # or: podman / existing roach-single
 uv run alembic upgrade head
-
-# 5a. Run as a local stdio MCP server (for Cursor / Claude Desktop)
-uv run total-recall-mcp
-# equivalent to: uv run python -m app.cli
-
-# 5b. ...or run as an HTTP service (what the Dockerfile/ECS deployment uses)
-uv run uvicorn app.main:app --host 0.0.0.0 --port 4646
-# MCP endpoint: POST http://localhost:4646/mcp
-# Health check: GET  http://localhost:4646/health
+uv run python scripts/seed.py             # optional test user
+uv run python scripts/seed_memories.py    # optional demo memories
+uv run total-recall-mcp-agent                   # stdio MCP server
 ```
 
-To point an MCP client (e.g. Cursor) at the stdio server, add to its MCP
-config:
-
-```json
-{
-  "mcpServers": {
-    "total-recall-mcp": {
-      "command": "uv",
-      "args": ["run", "total-recall-mcp"],
-      "cwd": "/absolute/path/to/total-recall-mcp-agent"
-    }
-  }
-}
-```
-
-### Run the tests
+HTTP mode (Docker Compose):
 
 ```bash
-cd total-recall-mcp-agent
+docker compose up --build
+# Health: http://localhost:4646/health
+# MCP:    http://localhost:4646/mcp
 
-# Run all tests
+# Or run HTTP transport directly:
+uv run total-recall-mcp-agent --transport streamable-http --host 0.0.0.0 --port 4646
+```
+
+## Memory demo
+
+```bash
+chmod +x scripts/demo_memory.sh
+./scripts/demo_memory.sh
+```
+
+Or run tests:
+
+```bash
+uv run pytest tests/test_memory_mcp_int.py -v
+```
+
+## Cursor MCP config
+
+Use `app/mcp-dev.json` as a template. No authentication setup is required for the hackathon demo — memories are scoped to a default principal (`local-test-user`). In application code this is `principal_id`; the database column remains `cognito_sub` for migration compatibility. Important details:
+
+- Logs go to **stderr** (stdout is JSON-RPC only)
+- Use full path to `uv` and `uv run --frozen --directory <project-path>`
+- See `app/mcp-cloud.example.json` to add CockroachDB Cloud MCP alongside this server
+
+## CockroachDB Cloud
+
+1. Create a cluster at https://cockroachlabs.cloud
+2. Copy the SQL connection string into `.env` as `DATABASE_URL`
+3. Run migrations: `uv run alembic upgrade head`
+4. Inspect your cloud cluster with ccloud (cluster name required):
+
+```bash
+./scripts/ccloud_cluster_info.sh <your-cluster-name>
+# or: export CCLOUD_CLUSTER_NAME=<your-cluster-name>
+```
+
+## AWS deployment (ECS Fargate)
+
+One-command deploy (build → ECR push → Terraform apply):
+
+```bash
+cd terraform/environments/dev
+cp terraform.tfvars.example terraform.tfvars   # fill in database_url
+cd ../..
+./scripts/deploy_aws.sh
+```
+
+Manual steps:
+
+```bash
+docker build -t total-recall-mcp-agent .
+# tag + push to ECR ...
+terraform -chdir=terraform/environments/dev apply
+```
+
+Outputs: `health_check_url`, `mcp_endpoint_url`
+
+Terraform provisions: ECS Fargate, ALB, Secrets Manager, IAM (Bedrock invoke), default VPC.
+
+## Submission
+
+See [SUBMISSION.md](../SUBMISSION.md) for Devpost checklist and a 3-minute demo video script.
+
+## Contributors
+
+- Gaurav Kanojia
+
+## Project structure
+
+```bash
+app/           # MCP agent (tools, services, repositories, models)
+scripts/       # seed, demo, ccloud helpers
+migrations/    # Alembic (users, audit_logs, memories + vector index)
+terraform/     # AWS ECS dev stack
+tests/         # pytest suite
+```
+
+## Tests & lint
+
+```bash
 uv run pytest
-
-# Run specific tests
-uv run pytest tests/test_mcp_server.py
-```
-
-### Lint & format
-
-```bash
 uv run ruff check .
 uv run ruff format .
 ```
 
-### Contributors
-- <email 1>
-- <email 2>
-- <email 3>

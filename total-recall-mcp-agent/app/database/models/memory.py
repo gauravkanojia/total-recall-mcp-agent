@@ -17,9 +17,10 @@ class Memory(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "memories"
 
-    cognito_sub: Mapped[str | None] = mapped_column(
+    principal_id: Mapped[str] = mapped_column(
+        "cognito_sub",
         String(255),
-        nullable=True,
+        nullable=False,
         index=True,
     )
 

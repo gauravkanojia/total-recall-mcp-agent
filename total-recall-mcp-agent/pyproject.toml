@@ -1,17 +1,15 @@
 [project]
-name = "total-recall-mcp"
+name = "total-recall-mcp-agent"
 version = "0.1.0"
 description = "[I'll be back] with responses for your requests..."
 readme = "README.md"
 requires-python = ">=3.14"
 
 dependencies = [
-    "fastapi[standard]",
-    "uvicorn",
+    "email-validator",
     "sqlalchemy",
     "asyncpg",
     "mcp",
-    "python-jose[cryptography]",
     "boto3",
     "pydantic-settings",
     "alembic>=1.18.5",
@@ -23,11 +21,12 @@ dependencies = [
 ]
 
 [project.scripts]
-total-recall-mcp = "app.cli:main"
+total-recall-mcp-agent = "app.cli:main"
 
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "pylint>=4.0.6",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.15.21",
@@ -50,7 +49,7 @@ include = ["app*"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-extend-exclude = ["migrations/versions"]
+extend-exclude = ["migrations/versions", ".pylint_cache"]
 
 [tool.ruff.lint]
 select = [
@@ -72,3 +71,16 @@ known-first-party = ["app"]
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pylint.main]
+py-version = "3.14"
+ignore-paths = ["^migrations/.*", "^tests/.*"]
+
+[tool.pylint.messages_control]
+max-line-length = 100
+disable = [
+    "too-few-public-methods",
+]
+
+[tool.pylint.design]
+max-args = 8

@@ -21,7 +21,7 @@ async def remember_memory(
     service = MemoryService(context.db_session, provider)
 
     return await service.remember(
-        cognito_sub=context.cognito_sub,
+        principal_id=context.principal_id,
         kind=kind,
         content=content,
         metadata=metadata,
@@ -42,7 +42,7 @@ async def recall_memory(
     service = MemoryService(context.db_session, provider)
 
     return await service.recall(
-        cognito_sub=context.cognito_sub,
+        principal_id=context.principal_id,
         query=query,
         kind=kind,
         limit=limit,
