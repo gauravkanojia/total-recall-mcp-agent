@@ -7,12 +7,12 @@
       }
     },
     "total-recall-mcp-agent": {
-      "command": "/Users/gkanojia/.local/bin/uv",
+      "command": "uv",
       "args": [
         "run",
         "--frozen",
         "--directory",
-        "/Users/gkanojia/CodeBase/Public_GitHub/Hackathons/cockroachdb-aws-hackathon-aug-2026/total-recall-mcp-agent",
+        "/absolute/path/to/cockroachdb-aws-hackathon-aug-2026/total-recall-mcp-agent",
         "total-recall-mcp-agent"
       ],
       "env": {

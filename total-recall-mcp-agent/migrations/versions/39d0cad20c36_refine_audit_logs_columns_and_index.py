@@ -1,4 +1,4 @@
-"""create audit logs table
+"""refine audit_logs: add updated_at, widen error_message, rebuild request_id index
 
 Revision ID: 39d0cad20c36
 Revises: 4af598f96850

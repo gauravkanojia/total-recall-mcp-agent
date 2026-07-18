@@ -1,3 +1,11 @@
+# Personal tracking docs — never publish
+SUBMISSION.md
+SETUP_AND_DEPLOY.md
+REVIEW_PLAN.md
+
+# Lint caches
+.pylint_cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
