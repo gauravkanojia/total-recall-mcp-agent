@@ -3,7 +3,8 @@ Memory DB model for semantic agent memory.
 """
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, String, Text
+from sqlalchemy import String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import settings
@@ -18,7 +19,6 @@ class Memory(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "memories"
 
     principal_id: Mapped[str] = mapped_column(
-        "cognito_sub",
         String(255),
         nullable=False,
         index=True,
@@ -37,7 +37,7 @@ class Memory(UUIDMixin, TimestampMixin, Base):
 
     metadata_: Mapped[dict | None] = mapped_column(
         "metadata",
-        JSON,
+        JSONB,
         nullable=True,
     )
 

@@ -1,0 +1,28 @@
+# Secrets — must never enter image layers
+.env
+.env.*
+!app/.env.example
+
+# VCS / IDE
+.git
+.gitignore
+.vscode
+
+# Python runtime artifacts
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.pylint_cache
+*.egg-info
+
+# Infra & local tooling (not needed inside the container)
+terraform
+scripts/deploy_aws.sh
+.agents
+skills-lock.json
+
+# Logs and local noise
+*.log
+.DS_Store

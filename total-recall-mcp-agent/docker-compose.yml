@@ -1,23 +1,60 @@
-version: "3.9"
+# Local 3-node CockroachDB cluster + MCP agent.
+#
+# Three nodes with 3x replication means the cluster — and the agent's memory —
+# survives the loss of any single node. See scripts/demo_resilience.sh.
+#
+#   docker compose up -d          # cluster + init + agent
+#   docker compose stop roach3    # kill a node; recall still works
+#
+# Host ports remapped to avoid conflicts; container-internal ports stay standard.
+# SQL: localhost:26260 · DB console: http://localhost:12287 · MCP Agent: http://localhost:12288
+
+x-roach-common: &roach-common
+  image: cockroachdb/cockroach:v26.2.3
+  command: start --insecure --join=roach1,roach2,roach3
 
 services:
-  cockroach:
-    image: cockroachdb/cockroach:v26.2.3
-    command: start-single-node --insecure
+  roach1:
+    <<: *roach-common
+    command: start --insecure --join=roach1,roach2,roach3 --advertise-addr=roach1
     ports:
-      - "26257:26257"
-      - "8080:8080"
+      - "26260:26257"
+      - "12287:8080"
     volumes:
-      - cockroach-data:/cockroach/cockroach-data
+      - roach1-data:/cockroach/cockroach-data
+
+  roach2:
+    <<: *roach-common
+    command: start --insecure --join=roach1,roach2,roach3 --advertise-addr=roach2
+    volumes:
+      - roach2-data:/cockroach/cockroach-data
+
+  roach3:
+    <<: *roach-common
+    command: start --insecure --join=roach1,roach2,roach3 --advertise-addr=roach3
+    volumes:
+      - roach3-data:/cockroach/cockroach-data
+
+  roach-init:
+    image: cockroachdb/cockroach:v26.2.3
+    entrypoint: ["/bin/bash", "/scripts/roach_init.sh"]
+    volumes:
+      - ./scripts/roach_init.sh:/scripts/roach_init.sh:ro
+    depends_on:
+      - roach1
+      - roach2
+      - roach3
+    restart: "no"
 
   mcp-agent:
     build: .
     ports:
-      - "4646:8080"
+      - "12288:8080"
     command:
       [
         "uv",
         "run",
+        "--no-sync",
         "total-recall-mcp-agent",
         "--transport",
         "streamable-http",
@@ -27,12 +64,19 @@ services:
         "8080",
       ]
     environment:
-      DATABASE_URL: cockroachdb+asyncpg://root@cockroach:26257/total_recall_mcp_db
+      # Container-to-container: standard port (host remaps don't apply here).
+      DATABASE_URL: cockroachdb+asyncpg://root@roach1:26257/total_recall_mcp_db
       DATABASE_NAME: total_recall_mcp_db
       EMBEDDING_PROVIDER: fake
       AWS_REGION: us-east-1
+      # Demo auth: two static tokens = two isolated memory spaces.
+      # curl -H "Authorization: Bearer demo-token-alice" http://localhost:12288/mcp
+      HTTP_AUTH_MODE: static
+      MCP_STATIC_TOKENS: demo-token-alice:alice,demo-token-bob:bob
     depends_on:
-      - cockroach
+      - roach-init
 
 volumes:
-  cockroach-data:
+  roach1-data:
+  roach2-data:
+  roach3-data:

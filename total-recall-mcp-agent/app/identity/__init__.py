@@ -4,6 +4,7 @@ from app.identity.principal import (
     DEFAULT_PRINCIPAL_EMAIL,
     DEFAULT_PRINCIPAL_ID,
     MCPPrincipal,
+    current_principal,
     resolve_mcp_principal,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "DEFAULT_PRINCIPAL_EMAIL",
     "DEFAULT_PRINCIPAL_ID",
     "MCPPrincipal",
+    "current_principal",
     "resolve_mcp_principal",
 ]

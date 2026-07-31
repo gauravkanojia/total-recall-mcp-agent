@@ -233,7 +233,7 @@ podman exec -it roach2 ./cockroach --host=roach2:26258 sql --insecure
 podman exec roach-single ./cockroach sql --insecure \
   --host=localhost:26257 --database=total_recall_mcp_db \
   -e "
-SELECT id, kind, content, cognito_sub AS principal_id
+SELECT id, kind, content, principal_id AS principal_id
 FROM memories
 ORDER BY created_at DESC
 LIMIT 5;

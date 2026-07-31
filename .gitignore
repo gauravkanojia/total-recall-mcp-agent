@@ -2,6 +2,7 @@
 SUBMISSION.md
 SETUP_AND_DEPLOY.md
 REVIEW_PLAN.md
+SECURITY_REVIEW_REPORT.md
 
 # Lint caches
 .pylint_cache/

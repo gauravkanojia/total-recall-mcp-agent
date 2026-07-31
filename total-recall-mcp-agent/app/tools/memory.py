@@ -41,11 +41,49 @@ async def recall_memory(
     provider = get_embedding_provider()
     service = MemoryService(context.db_session, provider)
 
+    # Note: recall results are intentionally NOT logged — memory content is
+    # user data and must not end up in stderr/CloudWatch.
     return await service.recall(
         principal_id=context.principal_id,
         query=query,
         kind=kind,
         limit=limit,
+    )
+
+
+async def list_memories(
+    kind: str | None = None,
+    limit: int = 20,
+    context=None,
+):
+    """
+    List the caller's stored memories, newest first.
+    """
+
+    provider = get_embedding_provider()
+    service = MemoryService(context.db_session, provider)
+
+    return await service.list_memories(
+        principal_id=context.principal_id,
+        kind=kind,
+        limit=limit,
+    )
+
+
+async def forget_memory(
+    memory_id: str,
+    context=None,
+):
+    """
+    Delete one of the caller's memories by id.
+    """
+
+    provider = get_embedding_provider()
+    service = MemoryService(context.db_session, provider)
+
+    return await service.forget(
+        principal_id=context.principal_id,
+        memory_id=memory_id,
     )
 
 
@@ -61,4 +99,12 @@ def register_memory_tools() -> None:
     executor.register(
         "recall_memory",
         recall_memory,
+    )
+    executor.register(
+        "list_memories",
+        list_memories,
+    )
+    executor.register(
+        "forget_memory",
+        forget_memory,
     )

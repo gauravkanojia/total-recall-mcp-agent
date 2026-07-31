@@ -26,14 +26,23 @@ def setup_logging() -> None:
         stream=sys.stderr,
     )
 
+    # Production: JSON lines with UTC timestamps — queryable in CloudWatch
+    # Logs Insights. Development: human-readable console output in app TZ.
+    if settings.ENVIRONMENT == "production":
+        timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
+        renderer = structlog.processors.JSONRenderer()
+    else:
+        timestamper = get_timezone_stamper
+        renderer = structlog.dev.ConsoleRenderer(pad_event_to=0)
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
-            get_timezone_stamper,
+            timestamper,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer(pad_event_to=0),
+            renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(settings.LOG_LEVEL),
         logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),

@@ -1,176 +1,275 @@
-# cockroachdb-aws-hackathon-aug-2026
+# Total Recall MCP Agent
 
-Codebase for CockroachDB × AWS Hackathon – Build the Future of Agentic Memory: https://cockroachdb-ai.devpost.com
+MCP (Model Context Protocol) agent for the [CockroachDB × AWS Hackathon](https://cockroachdb-ai.devpost.com) — **Build the Future of Agentic Memory**.
 
-> **Holistic project overview** (architecture, all CockroachDB + AWS components, hackathon compliance): see the [repository root README](../README.md).
+> Architecture, hackathon compliance, and component map: [repository root README](../README.md).
 
 ## Overview
 
-`total-recall-mcp-agent` is an MCP (Model Context Protocol) agent that uses CockroachDB
-as its persistent memory layer: every tool call runs inside a database transaction
-and is written to `audit_logs`, while semantic memories live in a `memories` table
-with a distributed vector index.
+`total-recall-mcp-agent` uses CockroachDB as its persistent memory layer: every tool call runs inside a database transaction and is written to `audit_logs`, while semantic memories live in a `memories` table with a distributed vector index.
 
-Two entry points share one bootstrap path (`app/bootstrap.py`):
+**Entry points** (shared bootstrap in `app/bootstrap.py`):
 
-- **`app/cli.py`** — stdio MCP server for Cursor / Claude Desktop (default)
-- **`app/cli.py --transport streamable-http`** — Streamable HTTP (`/mcp`, `/health`) for Docker / ECS on AWS
+| Mode | Command | Use case |
+|---|---|---|
+| stdio (default) | `uv run total-recall-mcp-agent` | Cursor, Claude Desktop |
+| Streamable HTTP | `uv run total-recall-mcp-agent --transport streamable-http` | Docker Compose, AWS ECS |
 
-### Hackathon tools used (≥2 required)
+### MCP tools
+
+| Tool | Description |
+|---|---|
+| `health_check` | Service liveness |
+| `get_user` | Return the caller's own user record (scoped by principal) |
+| `remember_memory` | Embed and persist semantic memory |
+| `recall_memory` | Vector similarity search over memories |
+
+No authentication is required for evaluation — memories are scoped to default principal `local-test-user` (`principal_id` in code; `principal_id` column in DB).
+
+---
+
+## Hackathon tools & AWS services
+
+### CockroachDB (≥2 required — all four used)
 
 | Tool | How we use it |
 |---|---|
-| **CockroachDB Distributed Vector Indexing** | `memories` table with `VECTOR(1024)` + `CREATE VECTOR INDEX` for `remember_memory` / `recall_memory` |
-| **CockroachDB Cloud Managed MCP Server** | Read-only cluster access from Cursor via `app/mcp-cloud.example.json` |
-| **ccloud CLI (Agent-Ready)** | `scripts/ccloud_cluster_info.sh` — JSON cluster metadata for agents/ops |
-| **CockroachDB Agent Skills (Open Source)** | Curated skills from [cockroachlabs/cockroachdb-skills](https://github.com/cockroachlabs/cockroachdb-skills) in `.agents/skills/` + project skill `total-recall-agentic-memory` |
+| **Distributed Vector Indexing** | `memories` table with `VECTOR(1024)` + vector index for `remember_memory` / `recall_memory` |
+| **Cloud Managed MCP Server** | Read-only cluster access via `app/mcp-cloud.example.json` |
+| **ccloud CLI (Agent-Ready)** | `scripts/ccloud_cluster_info.sh <cluster-name>` — JSON cluster metadata |
+| **Agent Skills (Open Source)** | `.agents/skills/` + `scripts/install_cockroachdb_skills.sh` |
 
-### CockroachDB Agent Skills
+### AWS (≥1 required)
 
-This project uses the open-source [CockroachDB Agent Skills](https://github.com/cockroachlabs/cockroachdb-skills) ecosystem so Cursor agents have production-grade CockroachDB expertise.
-
-**Installed skills** (`.agents/skills/`):
-
-| Skill | Use in this project |
+| Service | Role |
 |---|---|
-| `total-recall-agentic-memory` | Project-specific: vector memory schema, MCP tools, scripts |
-| `cockroachdb-sql` | Schema design, vector DDL, query patterns |
-| `setting-up-local-cluster` | Local CockroachDB dev environment |
-| `reviewing-cluster-health` | CockroachDB Cloud cluster diagnostics |
-| `designing-application-transactions` | Transaction patterns for audit + memory writes |
-| `configuring-audit-logging` | Audit log design aligned with `audit_logs` table |
+| **Amazon Bedrock** | Titan Text Embeddings V2 for production embeddings |
+| **Amazon ECS Fargate** | Containerized MCP agent behind ALB |
+| **ALB** | Public `/health` and `/mcp` endpoints |
+| **Secrets Manager** | `DATABASE_URL` for ECS tasks |
+| **CloudWatch Logs** | ECS task logs |
+| **IAM** | Task roles including `bedrock:InvokeModel` |
 
-**Install or refresh skills:**
+Local dev uses `EMBEDDING_PROVIDER=fake` (no AWS credentials). Production/terraform defaults to `bedrock`.
 
-```bash
-./scripts/install_cockroachdb_skills.sh          # curated subset (default)
-./scripts/install_cockroachdb_skills.sh --all    # all 34 upstream skills
-```
+---
 
-Requires Node.js 18+ (`npx`). Skills follow the [Agent Skills specification](https://agentskills.io/specification).
+## Prerequisites
 
-### AWS services used (≥1 required)
+| Tool | Local | AWS deploy |
+|---|---|---|
+| Python 3.14+ | Yes | (in Docker image) |
+| [uv](https://docs.astral.sh/uv/) | Yes | Yes |
+| Docker / Podman | Yes | Yes (build/push) |
+| CockroachDB | Local Docker or Cloud | CockroachDB Cloud recommended |
+| AWS CLI + Terraform >= 1.5 | No | Yes |
+| Bedrock model access | No | Yes (Titan Embeddings v2) |
 
-| AWS Service | Role in this agent |
-|---|---|
-| **Amazon Bedrock** | Titan Text Embeddings V2 (`amazon.titan-embed-text-v2:0`) generates vectors for `remember_memory` / `recall_memory` in production (`EMBEDDING_PROVIDER=bedrock`) |
-| **Amazon ECS (Fargate)** | Hosts the containerized MCP agent (`total-recall-mcp-agent --transport streamable-http`) behind an ALB — see `terraform/modules/ecs/` |
-| **Application Load Balancer** | Public HTTP endpoint for `/health` and `/mcp` (Streamable HTTP transport) |
-| **AWS Secrets Manager** | Stores `DATABASE_URL` for the ECS task |
-| **Amazon CloudWatch Logs** | ECS task logs for observability |
-| **AWS IAM** | Task execution role + Bedrock `InvokeModel` permission on the task role |
+---
 
-**Architecture (production):** Cursor/client → ALB → ECS Fargate → Bedrock (embeddings) + CockroachDB (memory/audit/vectors)
-
-Local dev uses `EMBEDDING_PROVIDER=fake` so you can develop without AWS credentials; production/terraform defaults to `bedrock`.
-
-### Semantic memory
-
-- `remember_memory(content, kind="fact", metadata=None)` — embed and persist
-- `recall_memory(query, kind=None, limit=5)` — cosine search via vector index
-
-```env
-EMBEDDING_PROVIDER=fake          # local dev
-EMBEDDING_PROVIDER=bedrock       # AWS production
-EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0
-EMBEDDING_DIMENSIONS=1024
-```
-
-## Quick start (local)
+## Local setup
 
 ```bash
 cd total-recall-mcp-agent
 cp app/.env.example .env
 uv sync
-docker compose up -d cockroach          # or: podman / existing roach-single
+docker compose up -d
 uv run alembic upgrade head
-uv run python scripts/seed.py             # optional test user
-uv run python scripts/seed_memories.py    # optional demo memories
-uv run total-recall-mcp-agent                   # stdio MCP server
+uv run python scripts/seed.py           # optional test user
+uv run python scripts/seed_memories.py  # optional demo memories
 ```
 
-HTTP mode (Docker Compose):
+Default `.env` values work with Docker Compose Cockroach:
+
+```env
+DATABASE_URL=cockroachdb+asyncpg://root@localhost:26257/total_recall_mcp_db
+DATABASE_NAME=total_recall_mcp_db
+EMBEDDING_PROVIDER=fake
+```
+
+---
+
+## Run locally
+
+### stdio MCP (Cursor)
 
 ```bash
-docker compose up --build
-# Health: http://localhost:4646/health
-# MCP:    http://localhost:4646/mcp
+uv run total-recall-mcp-agent
+```
 
-# Or run HTTP transport directly:
+Configure Cursor using `app/mcp-dev.json`:
+
+- Set `--directory` to your **absolute** project path
+- Keep `EMBEDDING_PROVIDER=fake` in `env`
+- Logs go to **stderr** (stdout is JSON-RPC only)
+
+Or use the launcher:
+
+```bash
+chmod +x scripts/run_mcp_stdio.sh
+./scripts/run_mcp_stdio.sh
+```
+
+### Streamable HTTP
+
+```bash
 uv run total-recall-mcp-agent --transport streamable-http --host 0.0.0.0 --port 4646
 ```
 
-## Memory demo
+Or via Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Endpoints: http://localhost:4646/health · http://localhost:4646/mcp
+
+### Memory demo
 
 ```bash
 chmod +x scripts/demo_memory.sh
 ./scripts/demo_memory.sh
 ```
 
-Or run tests:
+---
+
+## Validate locally
+
+**Health:**
 
 ```bash
+curl -s http://localhost:4646/health
+```
+
+**Tests:**
+
+```bash
+# Default: unit tests always run; integration auto-skips if DB is down
+uv run pytest
+
+# Unit tests only
+uv run pytest -m "not integration"
+
+# Integration only (when CockroachDB is running + migrated)
+uv run alembic upgrade head
+uv run pytest -m integration
 uv run pytest tests/test_memory_mcp_int.py -v
 ```
 
-## Cursor MCP config
+**CockroachDB persistence** (after using MCP tools):
 
-Use `app/mcp-dev.json` as a template. No authentication setup is required for the hackathon demo — memories are scoped to a default principal (`local-test-user`). In application code this is `principal_id`; the database column remains `cognito_sub` for migration compatibility. Important details:
+```sql
+SELECT tool_name, status, principal_id AS principal_id
+FROM audit_logs ORDER BY created_at DESC LIMIT 5;
 
-- Logs go to **stderr** (stdout is JSON-RPC only)
-- Use full path to `uv` and `uv run --frozen --directory <project-path>`
-- See `app/mcp-cloud.example.json` to add CockroachDB Cloud MCP alongside this server
+SELECT kind, content, principal_id AS principal_id
+FROM memories ORDER BY created_at DESC LIMIT 5;
+```
 
-## CockroachDB Cloud
+---
+
+## CockroachDB Cloud (optional)
 
 1. Create a cluster at https://cockroachlabs.cloud
-2. Copy the SQL connection string into `.env` as `DATABASE_URL`
-3. Run migrations: `uv run alembic upgrade head`
-4. Inspect your cloud cluster with ccloud (cluster name required):
+2. Set `DATABASE_URL` in `.env` to your cloud connection string
+3. Run `uv run alembic upgrade head`
+4. Inspect cluster metadata:
 
 ```bash
 ./scripts/ccloud_cluster_info.sh <your-cluster-name>
-# or: export CCLOUD_CLUSTER_NAME=<your-cluster-name>
 ```
 
-## AWS deployment (ECS Fargate)
+Add read-only Cloud MCP in Cursor via `app/mcp-cloud.example.json`.
 
-One-command deploy (build → ECR push → Terraform apply):
+---
+
+## AWS deployment
+
+Terraform provisions ECS Fargate, ALB, Secrets Manager, IAM, and CloudWatch. **CockroachDB is external** — use CockroachDB Cloud and pass `database_url` in tfvars.
+
+### 1. Prepare AWS
+
+```bash
+aws configure
+aws sts get-caller-identity
+```
+
+Enable **Amazon Titan Text Embeddings V2** in Bedrock (same region as deploy, default `us-east-1`).
+
+### 2. Configure Terraform
 
 ```bash
 cd terraform/environments/dev
-cp terraform.tfvars.example terraform.tfvars   # fill in database_url
-cd ../..
-./scripts/deploy_aws.sh
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-Manual steps:
+Edit `terraform.tfvars` — set `database_url` to your CockroachDB Cloud asyncpg URL:
+
+```
+cockroachdb+asyncpg://<user>:<password>@<host>:26257/total_recall_mcp_db?sslmode=verify-full
+```
+
+Run migrations against that database from your laptop before deploying.
 
 ```bash
-docker build -t total-recall-mcp-agent .
-# tag + push to ECR ...
-terraform -chdir=terraform/environments/dev apply
+terraform init
 ```
 
-Outputs: `health_check_url`, `mcp_endpoint_url`
+### 3. Deploy
 
-Terraform provisions: ECS Fargate, ALB, Secrets Manager, IAM (Bedrock invoke), default VPC.
+From project root:
 
-## Submission
+```bash
+chmod +x scripts/deploy_aws.sh
+./scripts/deploy_aws.sh plan        # preview changes
+./scripts/deploy_aws.sh apply       # build, push ECR, deploy
+./scripts/deploy_aws.sh destroy     # tear down when finished
+```
 
-See [SUBMISSION.md](../SUBMISSION.md) for Devpost checklist and a 3-minute demo video script.
+| Flag | Effect |
+|---|---|
+| `--skip-build` | Use `container_image` from tfvars (skip Docker/ECR) |
+| `--auto-approve` | Non-interactive apply or destroy |
 
-## Contributors
+### 4. Validate AWS endpoints
 
-- Gaurav Kanojia
+```bash
+cd terraform/environments/dev
+terraform output
+
+curl -s "$(terraform output -raw health_check_url)"
+```
+
+Expected health response: `{"status":"ok","service":"Total-Recall MCP Agent"}`
+
+MCP endpoint: `terraform output -raw mcp_endpoint_url` (streamable HTTP on `/mcp`).
+
+**ECS logs** if tasks fail:
+
+```bash
+aws logs tail /ecs/total-recall-mcp-agent-dev --follow --region us-east-1
+```
+
+---
+
+## CockroachDB Agent Skills
+
+```bash
+./scripts/install_cockroachdb_skills.sh          # curated subset (default)
+./scripts/install_cockroachdb_skills.sh --all    # all upstream skills
+```
+
+Requires Node.js 18+. Skills live in `.agents/skills/`.
+
+---
 
 ## Project structure
 
-```bash
+```
 app/           # MCP agent (tools, services, repositories, models)
-scripts/       # seed, demo, ccloud helpers
+scripts/       # seed, demo, deploy, ccloud helpers
 migrations/    # Alembic (users, audit_logs, memories + vector index)
-terraform/     # AWS ECS dev stack
+terraform/     # AWS deployment stack
 tests/         # pytest suite
 ```
 
@@ -182,3 +281,10 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+## License
+
+MIT — see [LICENSE](../LICENSE)
+
+## Contributors
+
+- Gaurav Kanojia

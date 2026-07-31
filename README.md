@@ -94,7 +94,7 @@ Total Recall MCP uses CockroachDB as the **persistent memory layer** — not jus
 
 | CockroachDB capability | How we use it | Where in the repo |
 |---|---|---|
-| **Distributed Vector Indexing** | `memories` table stores `VECTOR(1024)` embeddings; `CREATE VECTOR INDEX memories_vector_idx ON memories (cognito_sub, embedding vector_cosine_ops)` powers `recall_memory` cosine search | `migrations/versions/b7e4f1a29c80_*.py`, `app/repositories/memory_repository.py` |
+| **Distributed Vector Indexing** | `memories` table stores `VECTOR(1024)` embeddings; `CREATE VECTOR INDEX memories_vector_idx ON memories (principal_id, kind, embedding vector_cosine_ops)` powers `recall_memory` cosine search | `migrations/versions/b7e4f1a29c80_*.py`, `app/repositories/memory_repository.py` |
 | **CockroachDB Cloud Managed MCP Server** | Read-only cluster inspection from Cursor alongside the agent (list/describe clusters, run SQL) | `app/mcp-cloud.example.json` |
 | **ccloud CLI (Agent-Ready)** | JSON cluster metadata for agents and ops automation | `scripts/ccloud_cluster_info.sh` |
 | **CockroachDB Agent Skills Repo (Open Source)** | Curated operational expertise for agents (SQL, transactions, health, audit) | `.agents/skills/`, `scripts/install_cockroachdb_skills.sh` |
@@ -118,7 +118,7 @@ Skills live in `.agents/skills/` and are loaded automatically by Cursor.
 
 | Table | Purpose | Key columns |
 |---|---|---|
-| `users` | Persistent user identity | `id`, `email`, `principal_id` (`cognito_sub` in DB), timestamps |
+| `users` | Persistent user identity | `id`, `email`, `principal_id`, timestamps |
 | `audit_logs` | Every MCP tool invocation | `tool_name`, `request_id`, `principal_id`, `status`, `error_message` |
 | `memories` | Semantic agent memory | `principal_id`, `kind`, `content`, `metadata` (JSONB), `embedding` (VECTOR) |
 
@@ -127,18 +127,18 @@ Schema is managed with **Alembic** migrations under `total-recall-mcp-agent/migr
 ### CockroachDB-specific features in use
 
 - **`VECTOR(1024)` type** — native vector column for embeddings (1024-dim Titan v2)
-- **Vector index with `vector_cosine_ops`** — partitioned by `principal_id` (`cognito_sub` column) for per-caller memory isolation and fast similarity search
+- **Vector index with `vector_cosine_ops`** — partitioned by `principal_id` for per-caller memory isolation and fast similarity search
 - **`JSONB` metadata** — flexible key/value tags on memories (`kind`, custom fields)
 - **Distributed SQL + transactions** — each MCP tool runs inside a DB transaction; audit + memory writes are atomic
 - **`sqlalchemy-cockroachdb` + `asyncpg`** — async Python driver stack (`cockroachdb+asyncpg://...`)
 - **`pgvector` SQLAlchemy integration** — `Memory.embedding.cosine_distance()` for recall queries
-- **Local single-node or CockroachDB Cloud** — same schema works on Docker/Podman dev clusters and managed cloud clusters
+- **Local 3-node cluster or CockroachDB Cloud** — same schema works on the local replicated compose cluster and managed cloud clusters
 
 ### Deployment targets for CockroachDB
 
 | Environment | Connection | Notes |
 |---|---|---|
-| **Local dev** | `cockroachdb+asyncpg://root@localhost:26257/total_recall_mcp_db` | Docker Compose or Podman single-node (`docker-compose.yml`) |
+| **Local dev** | `cockroachdb+asyncpg://root@localhost:26260/total_recall_mcp_db` | 3-node replicated compose cluster (`docker-compose.yml`); survives any single node failure — see `scripts/demo_resilience.sh` |
 | **CockroachDB Cloud** | TLS connection string with `sslmode=verify-full` | Set `DATABASE_URL` in `.env` or Secrets Manager |
 | **Cloud MCP (read-only)** | Bearer token to `https://cockroachlabs.cloud/mcp` | Complements the agent; does not replace application memory |
 
@@ -147,9 +147,13 @@ Schema is managed with **Alembic** migrations under `total-recall-mcp-agent/migr
 | Tool | Database interaction |
 |---|---|
 | `health_check` | Connectivity / liveness (no writes) |
-| `get_user` | Reads from `users` |
+| `get_user` | Reads the caller's own row from `users` |
 | `remember_memory` | Embeds content → inserts into `memories` + audit log |
 | `recall_memory` | Embeds query → vector index search on `memories` + audit log |
+| `list_memories` | Caller's memories newest-first (no embedding) + audit log |
+| `forget_memory` | Scoped delete of one caller-owned memory + audit log |
+
+HTTP endpoints: `/health` (liveness, static) and `/ready` (readiness — verifies the database answers `SELECT 1`, returns 503 otherwise). Both are public; `/mcp` requires auth.
 
 All mutating tools flow through `app/mcp/executor.py`, which guarantees audit logging on every call.
 
@@ -195,14 +199,25 @@ Infrastructure lives in `total-recall-mcp-agent/terraform/environments/dev/`:
 
 ```bash
 cd total-recall-mcp-agent/terraform/environments/dev
-cp terraform.tfvars.example terraform.tfvars   # ECR image URI, database_url
+cp terraform.tfvars.example terraform.tfvars   # set database_url (CockroachDB Cloud)
 terraform init
-terraform apply
+cd ../../..
+./scripts/deploy_aws.sh plan      # preview
+./scripts/deploy_aws.sh apply     # build image, push ECR, deploy
+./scripts/deploy_aws.sh destroy   # tear down when finished
 ```
 
 **Outputs:** `health_check_url`, `mcp_endpoint_url`, `alb_dns_name`
 
+**Validate after deploy:**
+
+```bash
+curl -s "$(terraform -chdir=total-recall-mcp-agent/terraform/environments/dev output -raw health_check_url)"
+```
+
 **Provisioned resources:** ECS cluster + service, task definition (512 CPU / 1024 MiB), ALB + target group + listener, security groups, CloudWatch log group, Secrets Manager secrets, IAM roles/policies.
+
+**Prerequisites for AWS:** AWS CLI credentials, Docker, Terraform >= 1.5, Bedrock Titan Embeddings v2 enabled in your region, and a reachable CockroachDB Cloud `DATABASE_URL` in `terraform.tfvars`. CockroachDB is not provisioned by this Terraform stack.
 
 ---
 
@@ -239,19 +254,28 @@ cockroachdb-aws-hackathon-aug-2026/
 
 ---
 
-## Quick start
+## Quick start (judges & developers)
 
-Full setup instructions are in [`total-recall-mcp-agent/README.md`](total-recall-mcp-agent/README.md).
+**Prerequisites:** Python 3.14+, [uv](https://docs.astral.sh/uv/), Docker (or Podman) for local CockroachDB.
 
 ```bash
 cd total-recall-mcp-agent
 cp app/.env.example .env
 uv sync
-docker compose up -d cockroach
+docker compose up -d
 uv run alembic upgrade head
 uv run python scripts/seed_memories.py    # optional demo data
-uv run total-recall-mcp-agent                     # stdio MCP for Cursor
+uv run total-recall-mcp-agent             # stdio MCP for Cursor
 ```
+
+**HTTP mode (optional):**
+
+```bash
+uv run total-recall-mcp-agent --transport streamable-http --host 0.0.0.0 --port 4646
+curl http://localhost:4646/health
+```
+
+**Cursor:** use `app/mcp-dev.json` as a template (set absolute project path in `--directory`). stdio is unauthenticated by design (local, single-user) — memories scope to principal `local-test-user`.
 
 **Demo memory tools:**
 
@@ -260,11 +284,47 @@ chmod +x scripts/demo_memory.sh
 ./scripts/demo_memory.sh
 ```
 
+**Verify CockroachDB is the memory layer:**
+
+```sql
+SELECT tool_name, status, principal_id FROM audit_logs ORDER BY created_at DESC LIMIT 5;
+SELECT kind, content, principal_id FROM memories ORDER BY created_at DESC LIMIT 5;
+```
+
 **Run tests:**
 
 ```bash
 uv run pytest
 ```
+
+Detailed project setup, AWS deployment, and endpoint validation: [`total-recall-mcp-agent/README.md`](total-recall-mcp-agent/README.md).
+
+---
+
+## Authentication & security
+
+| Transport | Auth | Principal |
+|---|---|---|
+| **stdio** (Cursor, Claude Desktop) | None — local single-user by design | `local-test-user` |
+| **HTTP** (`/mcp` via ALB or compose) | `Authorization: Bearer <token>`, enforced by middleware | `github:<login>` or static-token mapping |
+
+`HTTP_AUTH_MODE` controls HTTP auth:
+
+- **`github`** (production default) — tokens are validated against the GitHub API (`GET /user`); the caller's principal becomes `github:<login>`. Use a **fine-grained PAT with zero scopes** — identity verification needs no permissions, so a leaked demo token grants nothing.
+- **`static`** — only `MCP_STATIC_TOKENS` (`token:principal` pairs) are accepted; used by `docker-compose.yml` to demo two isolated memory spaces (`demo-token-alice` / `demo-token-bob`).
+- **`off`** — local development only; the server logs a warning at startup.
+
+Security properties, enforced in code:
+
+- **Tenant isolation** — every memory read/write is scoped by `principal_id` in the repository layer; the vector index leads with `(principal_id, kind)`, so similarity search never crosses callers.
+- **Durable audit trail** — every tool call writes `STARTED` → `SUCCEEDED`/`FAILED` rows to `audit_logs` in dedicated transactions, so the trail survives tool rollbacks.
+- **Fail-fast TLS** — `ENVIRONMENT=production` refuses to boot without `sslmode=verify-full` in `DATABASE_URL`.
+- **Sanitized errors** — validation messages pass through to MCP clients; unexpected errors return a generic message while details stay in server logs and `audit_logs`.
+- **Bounded inputs** — content ≤ 8,000 chars, metadata ≤ 16 KB, recall limit ≤ 50; clean `ValueError`s instead of DB/Bedrock errors.
+- **No memory content in logs** — recall results are never written to stderr/CloudWatch.
+- **Container hardening** — non-root user, no dev dependencies, `.dockerignore` keeps secrets out of image layers.
+
+Known demo limitation: the ALB listener is HTTP (no custom domain/ACM cert), so bearer tokens transit unencrypted — hence the zero-scope PAT guidance above. Production deployments should attach an ACM certificate and HTTPS listener.
 
 ---
 
@@ -279,19 +339,18 @@ uv run pytest
 
 ---
 
-## Submission narrative (short)
+## Submission narrative (for Devpost)
 
-> **Total Recall MCP** gives AI agents durable memory through CockroachDB. Semantic memories are embedded with **Amazon Bedrock** (Titan v2), stored in a `memories` table with a **distributed vector index**, and recalled via cosine similarity — all scoped per user and fully audited. In production the agent runs on **Amazon ECS Fargate** behind an ALB. Developers use stdio MCP in Cursor, inspect clusters via the **Cloud Managed MCP Server**, automate ops with the **ccloud CLI**, and apply **CockroachDB Agent Skills** for schema, transaction, and health expertise.
+> **Total Recall MCP** gives AI agents durable memory through CockroachDB. Semantic memories are embedded with **Amazon Bedrock** (Titan v2), stored in a `memories` table with a **distributed vector index**, and recalled via cosine similarity — all scoped per caller and fully audited. In production the agent runs on **Amazon ECS Fargate** behind an ALB. Developers use stdio MCP in Cursor, inspect clusters via the **Cloud Managed MCP Server**, automate ops with the **ccloud CLI**, and apply **CockroachDB Agent Skills** for schema, transaction, and health expertise.
+
+**CockroachDB tools used:** Distributed Vector Indexing · Cloud Managed MCP Server · ccloud CLI · Agent Skills  
+**AWS services used:** Amazon Bedrock · Amazon ECS Fargate · ALB · Secrets Manager · CloudWatch Logs · IAM
 
 ---
 
 ## Contributors
 
 - Gaurav Kanojia
-
-## Submission
-
-Devpost checklist and demo video script: [SUBMISSION.md](SUBMISSION.md)
 
 ## License
 

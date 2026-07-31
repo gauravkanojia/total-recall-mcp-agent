@@ -5,9 +5,12 @@ from app.mcp.registry import register_tools
 
 
 @pytest.mark.asyncio
-async def test_remember_and_recall_memory_tools():
+async def test_remember_and_recall_memory_tools(
+    patch_mcp_executor_no_db,
+    patch_memory_service_repository,
+):
     """
-    MCP-level integration test for semantic memory tools.
+    MCP-level unit test for semantic memory tools (repository faked in-memory).
     """
 
     register_tools()

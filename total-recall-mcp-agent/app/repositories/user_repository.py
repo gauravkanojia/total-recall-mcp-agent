@@ -50,6 +50,17 @@ class UserRepository:
 
         return result.scalar_one_or_none()
 
+    async def get_by_principal_id(self, principal_id: str) -> User | None:
+        """
+        Retrieve a user by caller principal.
+        """
+
+        statement = select(User).where(User.principal_id == principal_id)
+
+        result = await self._session.execute(statement)
+
+        return result.scalar_one_or_none()
+
     async def get_by_email(self, email: str) -> User | None:
         """
         Retrieve a user by email.

@@ -2,6 +2,8 @@
 Memory repository.
 """
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +44,60 @@ class MemoryRepository:
         await self._session.refresh(memory)
 
         return memory
+
+    async def list_by_principal(
+        self,
+        *,
+        principal_id: str,
+        kind: str | None = None,
+        limit: int = 20,
+    ) -> list[Memory]:
+        """
+        Return the caller's memories, newest first.
+        """
+
+        statement = (
+            select(Memory)
+            .where(Memory.principal_id == principal_id)
+            .order_by(Memory.created_at.desc())
+            .limit(limit)
+        )
+
+        if kind is not None:
+            statement = statement.where(Memory.kind == kind)
+
+        result = await self._session.execute(statement)
+
+        return list(result.scalars().all())
+
+    async def delete_scoped(
+        self,
+        *,
+        principal_id: str,
+        memory_id: UUID,
+    ) -> bool:
+        """
+        Delete one memory, only if it belongs to the caller.
+
+        Scoping by principal_id in the lookup means a caller can never
+        delete (or probe the existence of) another principal's memories.
+        """
+
+        statement = select(Memory).where(
+            Memory.id == memory_id,
+            Memory.principal_id == principal_id,
+        )
+
+        result = await self._session.execute(statement)
+        memory = result.scalar_one_or_none()
+
+        if memory is None:
+            return False
+
+        await self._session.delete(memory)
+        await self._session.flush()
+
+        return True
 
     async def search_similar(
         self,

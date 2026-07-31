@@ -44,7 +44,6 @@ class User(
     )
 
     principal_id: Mapped[str | None] = mapped_column(
-        "cognito_sub",
         String(255),
         nullable=True,
         unique=True,

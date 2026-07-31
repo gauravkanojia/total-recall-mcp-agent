@@ -174,7 +174,8 @@ resource "aws_ecs_task_definition" "this" {
         { name = "EMBEDDING_PROVIDER", value = var.embedding_provider },
         { name = "EMBEDDING_MODEL_ID", value = var.embedding_model_id },
         { name = "EMBEDDING_DIMENSIONS", value = tostring(var.embedding_dimensions) },
-        { name = "ENVIRONMENT", value = "production" }
+        { name = "ENVIRONMENT", value = "production" },
+        { name = "HTTP_AUTH_MODE", value = "github" }
       ]
       secrets = [
         { name = "DATABASE_URL", valueFrom = var.database_secret_arn }

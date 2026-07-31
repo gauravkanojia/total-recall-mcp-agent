@@ -26,7 +26,7 @@ This project is an MCP agent where **CockroachDB is the system of record** for a
 -- Semantic memory with distributed vector index
 CREATE TABLE memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    cognito_sub STRING(255) NOT NULL,
+    principal_id STRING(255) NOT NULL,
     kind STRING NOT NULL,
     content STRING NOT NULL,
     metadata JSONB,
@@ -36,7 +36,7 @@ CREATE TABLE memories (
 );
 
 CREATE VECTOR INDEX memories_vector_idx
-ON memories (cognito_sub, kind, embedding vector_cosine_ops);
+ON memories (principal_id, kind, embedding vector_cosine_ops);
 ```
 
 Also: `users`, `audit_logs`. Migrations in `migrations/versions/`.
@@ -70,7 +70,7 @@ Pair this skill with installed skills from [cockroachlabs/cockroachdb-skills](ht
 ## Vector memory guidelines
 
 1. Keep `EMBEDDING_DIMENSIONS=1024` aligned with Bedrock Titan v2 and the `VECTOR(1024)` column.
-2. Scope recall by `principal_id` in application code (DB column `cognito_sub`) — required on every memory row; vector index prefix is `(cognito_sub, kind)`.
+2. Scope recall by `principal_id` — required on every memory row; vector index prefix is `(principal_id, kind)`.
 3. Pass `kind` to `recall_memory` when possible — the vector index includes `kind` as a prefix column for filtered recall.
 4. Store structured tags in `metadata` JSONB, not in `content`.
 5. Run `uv run alembic upgrade head` after pointing `DATABASE_URL` at a new cluster.
@@ -79,7 +79,7 @@ Pair this skill with installed skills from [cockroachlabs/cockroachdb-skills](ht
 
 ```bash
 uv sync
-docker compose up -d cockroach
+docker compose up -d
 uv run alembic upgrade head
 uv run total-recall-mcp-agent
 ```

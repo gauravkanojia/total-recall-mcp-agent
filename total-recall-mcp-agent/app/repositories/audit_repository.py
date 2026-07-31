@@ -16,7 +16,7 @@ class AuditRepository:
         request_id: str,
         principal_id: str | None,
         status: str,
-        error_message: str,
+        error_message: str | None = None,
     ):
 
         audit = AuditLog(

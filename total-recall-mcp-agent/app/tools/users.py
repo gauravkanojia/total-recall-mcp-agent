@@ -7,16 +7,15 @@ from app.services.user_service import UserService
 
 
 async def get_user(
-    email: str,
     context,
 ):
     """
-    Retrieve user by email.
+    Return the calling principal's user record.
     """
 
     service = UserService(context.db_session)
 
-    return await service.get_user(email)
+    return await service.get_user_by_principal(context.principal_id)
 
 
 def register_user_tools() -> None:

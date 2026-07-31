@@ -93,10 +93,46 @@ def main() -> None:
     _register_shutdown_handlers()
 
     try:
-        server.run(transport=args.transport)
+        if args.transport in {"sse", "streamable-http"}:
+            _run_http(server, args)
+        else:
+            server.run(transport=args.transport)
     except KeyboardInterrupt:
         logger.info("mcp_server_stopped", signal="KeyboardInterrupt")
         os._exit(0)
+
+
+def _run_http(server, args) -> None:
+    """
+    Serve an HTTP transport behind the bearer-token auth middleware.
+
+    HTTP_AUTH_MODE controls behaviour: "github" validates GitHub tokens,
+    "static" accepts only MCP_STATIC_TOKENS, "off" disables auth (dev only).
+    """
+
+    import uvicorn
+
+    from app.auth.middleware import BearerAuthMiddleware
+
+    if settings.HTTP_AUTH_MODE == "off":
+        logger.warning(
+            "http_auth_disabled",
+            hint="Set HTTP_AUTH_MODE=github (or static) before public deployment.",
+        )
+
+    app = (
+        server.streamable_http_app()
+        if args.transport == "streamable-http"
+        else server.sse_app()
+    )
+    app.add_middleware(BearerAuthMiddleware)
+
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_config=None,
+    )
 
 
 if __name__ == "__main__":
