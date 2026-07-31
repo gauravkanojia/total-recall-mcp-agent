@@ -24,7 +24,7 @@ def upgrade() -> None:
         """
         CREATE TABLE memories (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            cognito_sub STRING,
+            cognito_sub STRING NOT NULL,
             kind STRING NOT NULL,
             content STRING NOT NULL,
             metadata JSONB,
@@ -41,7 +41,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE VECTOR INDEX memories_vector_idx
-        ON memories (cognito_sub, embedding vector_cosine_ops)
+        ON memories (cognito_sub, kind, embedding vector_cosine_ops)
         """
     )
 

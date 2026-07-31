@@ -28,7 +28,7 @@ class UserRepository:
             email=payload.email,
             first_name=payload.first_name,
             last_name=payload.last_name,
-            cognito_sub=payload.cognito_sub,
+            principal_id=payload.principal_id,
         )
 
         self._session.add(user)
@@ -45,6 +45,17 @@ class UserRepository:
         """
 
         statement = select(User).where(User.id == user_id)
+
+        result = await self._session.execute(statement)
+
+        return result.scalar_one_or_none()
+
+    async def get_by_principal_id(self, principal_id: str) -> User | None:
+        """
+        Retrieve a user by caller principal.
+        """
+
+        statement = select(User).where(User.principal_id == principal_id)
 
         result = await self._session.execute(statement)
 

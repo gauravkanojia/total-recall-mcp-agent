@@ -1,33 +1,33 @@
 [project]
-name = "total-recall-mcp"
+name = "total-recall-mcp-agent"
 version = "0.1.0"
 description = "[I'll be back] with responses for your requests..."
 readme = "README.md"
 requires-python = ">=3.14"
 
 dependencies = [
-    "fastapi[standard]",
-    "uvicorn",
-    "sqlalchemy",
-    "asyncpg",
-    "mcp",
-    "python-jose[cryptography]",
-    "boto3",
-    "pydantic-settings",
+    "email-validator>=2.3.0",
+    "sqlalchemy>=2.0.51",
+    "asyncpg>=0.31.0",
+    "mcp>=1.28.1",
+    "boto3>=1.43.46",
+    "pydantic-settings>=2.14.2",
     "alembic>=1.18.5",
     "structlog>=26.1.0",
     "python-dotenv>=1.2.2",
     "greenlet>=3.5.3",
     "sqlalchemy-cockroachdb>=2.0.4",
     "pgvector>=0.4.0",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]
-total-recall-mcp = "app.cli:main"
+total-recall-mcp-agent = "app.cli:main"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
+    "httpx2>=0.28.1",
+    "pylint>=4.0.6",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.15.21",
@@ -40,6 +40,9 @@ pythonpath = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that require a reachable DATABASE_URL (auto-skipped when unavailable)",
+]
 
 [tool.uv]
 package = true
@@ -50,7 +53,7 @@ include = ["app*"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-extend-exclude = ["migrations/versions"]
+extend-exclude = ["migrations/versions", ".pylint_cache"]
 
 [tool.ruff.lint]
 select = [
@@ -72,3 +75,16 @@ known-first-party = ["app"]
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pylint.main]
+py-version = "3.14"
+ignore-paths = ["^migrations/.*", "^tests/.*"]
+
+[tool.pylint.messages_control]
+max-line-length = 100
+disable = [
+    "too-few-public-methods",
+]
+
+[tool.pylint.design]
+max-args = 8

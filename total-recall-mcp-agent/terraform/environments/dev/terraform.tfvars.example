@@ -1,0 +1,6 @@
+aws_region           = "us-east-1"
+project_name         = "total-recall-mcp-agent"
+environment          = "dev"
+container_image      = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/total-recall-mcp-agent:latest"
+database_url         = "cockroachdb+asyncpg://<user>:<password>@<host>:26257/total_recall_mcp_db?sslmode=verify-full"
+embedding_provider   = "bedrock"

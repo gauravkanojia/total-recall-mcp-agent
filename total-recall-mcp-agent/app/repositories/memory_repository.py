@@ -2,6 +2,8 @@
 Memory repository.
 """
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,7 @@ class MemoryRepository:
     async def create(
         self,
         *,
-        cognito_sub: str | None,
+        principal_id: str,
         kind: str,
         content: str,
         metadata: dict | None,
@@ -30,7 +32,7 @@ class MemoryRepository:
         """
 
         memory = Memory(
-            cognito_sub=cognito_sub,
+            principal_id=principal_id,
             kind=kind,
             content=content,
             metadata_=metadata,
@@ -43,10 +45,64 @@ class MemoryRepository:
 
         return memory
 
+    async def list_by_principal(
+        self,
+        *,
+        principal_id: str,
+        kind: str | None = None,
+        limit: int = 20,
+    ) -> list[Memory]:
+        """
+        Return the caller's memories, newest first.
+        """
+
+        statement = (
+            select(Memory)
+            .where(Memory.principal_id == principal_id)
+            .order_by(Memory.created_at.desc())
+            .limit(limit)
+        )
+
+        if kind is not None:
+            statement = statement.where(Memory.kind == kind)
+
+        result = await self._session.execute(statement)
+
+        return list(result.scalars().all())
+
+    async def delete_scoped(
+        self,
+        *,
+        principal_id: str,
+        memory_id: UUID,
+    ) -> bool:
+        """
+        Delete one memory, only if it belongs to the caller.
+
+        Scoping by principal_id in the lookup means a caller can never
+        delete (or probe the existence of) another principal's memories.
+        """
+
+        statement = select(Memory).where(
+            Memory.id == memory_id,
+            Memory.principal_id == principal_id,
+        )
+
+        result = await self._session.execute(statement)
+        memory = result.scalar_one_or_none()
+
+        if memory is None:
+            return False
+
+        await self._session.delete(memory)
+        await self._session.flush()
+
+        return True
+
     async def search_similar(
         self,
         *,
-        cognito_sub: str | None,
+        principal_id: str,
         query_embedding: list[float],
         kind: str | None = None,
         limit: int = 5,
@@ -59,7 +115,7 @@ class MemoryRepository:
 
         statement = (
             select(Memory, distance)
-            .where(Memory.cognito_sub == cognito_sub)
+            .where(Memory.principal_id == principal_id)
             .order_by(distance)
             .limit(limit)
         )

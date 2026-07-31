@@ -25,7 +25,7 @@ async def seed_users():
             email="test@example.com",
             first_name="Test",
             last_name="User",
-            cognito_sub="local-test-user",
+            principal_id="local-test-user",
         )
 
         session.add(user)

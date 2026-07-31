@@ -1,35 +1,47 @@
 import pytest
 
 from app.clients.embeddings import FakeEmbeddingProvider
-from app.database.session import get_session_factory
-from app.services.memory_service import MemoryService
+from app.services.memory_service import MemoryService, require_principal_id
 
 
 @pytest.mark.asyncio
-async def test_memory_service_remember_and_recall():
-    """
-    Remember a memory and recall it with a related query.
-    """
-
-    session_factory = get_session_factory()
+async def test_memory_service_rejects_missing_principal_id():
     provider = FakeEmbeddingProvider(dimensions=1024)
+    service = MemoryService(session=None, embedding_provider=provider)
 
-    async with session_factory() as session:
-        service = MemoryService(session, provider)
-
-        remembered = await service.remember(
-            cognito_sub="local-test-user",
+    with pytest.raises(ValueError, match="principal_id is required"):
+        await service.remember(
+            principal_id=None,
             kind="preference",
             content="User likes dark mode",
         )
 
-        recalled = await service.recall(
-            cognito_sub="local-test-user",
-            query="theme preference",
-            kind="preference",
-        )
 
-        await session.commit()
+def test_require_principal_id_rejects_empty_values():
+    with pytest.raises(ValueError, match="principal_id is required"):
+        require_principal_id(None)
+
+    with pytest.raises(ValueError, match="principal_id is required"):
+        require_principal_id("")
+
+
+@pytest.mark.asyncio
+async def test_memory_service_remember_and_recall(fake_memory_repository):
+    provider = FakeEmbeddingProvider(dimensions=1024)
+    service = MemoryService(session=None, embedding_provider=provider)
+    service.repository = fake_memory_repository
+
+    remembered = await service.remember(
+        principal_id="local-test-user",
+        kind="preference",
+        content="User likes dark mode",
+    )
+
+    recalled = await service.recall(
+        principal_id="local-test-user",
+        query="theme preference",
+        kind="preference",
+    )
 
     assert remembered["content"] == "User likes dark mode"
     assert recalled

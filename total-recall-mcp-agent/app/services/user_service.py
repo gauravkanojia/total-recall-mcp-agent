@@ -9,12 +9,18 @@ class UserService:
     def __init__(self, session):
         self.repository = UserRepository(session)
 
-    async def get_user(
+    async def get_user_by_principal(
         self,
-        email: str,
+        principal_id: str | None,
     ) -> dict | None:
+        """
+        Return the caller's own user record (scoped by principal).
+        """
 
-        user = await self.repository.get_by_email(email)
+        if not principal_id:
+            return None
+
+        user = await self.repository.get_by_principal_id(principal_id)
 
         if not user:
             return None
@@ -25,4 +31,5 @@ class UserService:
             "first_name": user.first_name,
             "last_name": user.last_name,
             "is_active": user.is_active,
+            "principal_id": user.principal_id,
         }

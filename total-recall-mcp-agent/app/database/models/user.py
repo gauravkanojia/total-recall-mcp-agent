@@ -43,7 +43,7 @@ class User(
         server_default=text("true"),
     )
 
-    cognito_sub: Mapped[str | None] = mapped_column(
+    principal_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         unique=True,

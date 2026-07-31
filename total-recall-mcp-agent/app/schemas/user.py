@@ -22,7 +22,7 @@ class UserCreate(UserBase):
     Payload for creating a user.
     """
 
-    cognito_sub: str | None = None
+    principal_id: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -44,4 +44,4 @@ class UserRead(UserBase):
 
     id: UUID
     is_active: bool
-    cognito_sub: str | None
+    principal_id: str | None
