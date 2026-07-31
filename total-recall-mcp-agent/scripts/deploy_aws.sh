@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 #   - AWS CLI configured (aws sts get-caller-identity)
-#   - Docker (plan/apply only, unless --skip-build)
+#   - Podman (plan/apply only, unless --skip-build)
 #   - Terraform >= 1.5
 #   - terraform/environments/dev/terraform.tfvars filled in (database_url)
 #
@@ -38,7 +38,7 @@ Commands:
   destroy   Tear down AWS resources with terraform destroy
 
 Options:
-  --skip-build     Skip ECR login, Docker build, and image push (use container_image from terraform.tfvars)
+  --skip-build     Skip ECR login, Podman build, and image push (use container_image from terraform.tfvars)
   --auto-approve   Skip interactive approval for apply or destroy
   -h, --help       Show this help
 
@@ -105,8 +105,8 @@ require_terraform() {
 }
 
 require_docker() {
-  if ! command -v docker >/dev/null 2>&1; then
-    echo "docker not found (required unless --skip-build)." >&2
+  if ! command -v podman >/dev/null 2>&1; then
+    echo "podman not found (required unless --skip-build)." >&2
     exit 1
   fi
 }
@@ -137,25 +137,29 @@ build_and_push_image() {
     aws ecr create-repository --repository-name "${ECR_REPO}" --region "${AWS_REGION}" >/dev/null
   fi
 
-  echo "=== Docker login to ECR ==="
+  echo "=== Podman login to ECR ==="
   aws ecr get-login-password --region "${AWS_REGION}" \
-    | docker login --username AWS --password-stdin "${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    | podman login --username AWS --password-stdin "${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
   echo "=== Build image ==="
-  docker build -t "${PROJECT_NAME}:${IMAGE_TAG}" "${ROOT_DIR}"
+  podman build -t "${PROJECT_NAME}:${IMAGE_TAG}" "${ROOT_DIR}"
 
   echo "=== Tag and push ${image_uri} ==="
-  docker tag "${PROJECT_NAME}:${IMAGE_TAG}" "${image_uri}"
-  docker push "${image_uri}"
+  podman tag "${PROJECT_NAME}:${IMAGE_TAG}" "${image_uri}"
+  podman push "${image_uri}"
 
   CONTAINER_IMAGE_VAR=(-var="container_image=${image_uri}")
 }
 
 terraform_plan() {
   echo "=== Terraform plan ==="
-  terraform -chdir="${TF_DIR}" plan \
-    -var="aws_region=${AWS_REGION}" \
-    "${CONTAINER_IMAGE_VAR[@]}"
+  local -a plan_args=(-var="aws_region=${AWS_REGION}")
+
+  if [[ ${#CONTAINER_IMAGE_VAR[@]} -gt 0 ]]; then
+    plan_args+=("${CONTAINER_IMAGE_VAR[@]}")
+  fi
+
+  terraform -chdir="${TF_DIR}" plan "${plan_args[@]}"
 }
 
 terraform_apply() {

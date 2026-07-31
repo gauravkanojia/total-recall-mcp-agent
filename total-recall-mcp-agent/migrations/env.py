@@ -10,6 +10,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
+from app.database.database import _url_and_connect_args
 
 # Import models so SQLAlchemy metadata is populated
 from app.database.models import (
@@ -74,11 +75,10 @@ async def run_migrations_online() -> None:
     Run migrations using async database connection.
     """
 
+    url, connect_args = _url_and_connect_args()
     connectable = create_async_engine(
-        settings.DATABASE_URL,
-        connect_args={
-            "ssl": False,
-        },
+        url,
+        connect_args=connect_args,
         poolclass=pool.NullPool,
     )
 
