@@ -128,10 +128,7 @@ def test_middleware_rejects_missing_token(monkeypatch):
     client = TestClient(_build_app())
 
     assert client.get("/whoami").status_code == 401
-    assert (
-        client.get("/whoami", headers={"Authorization": "Bearer wrong"}).status_code
-        == 401
-    )
+    assert client.get("/whoami", headers={"Authorization": "Bearer wrong"}).status_code == 401
 
 
 def test_middleware_binds_principal_and_allows_health(monkeypatch):

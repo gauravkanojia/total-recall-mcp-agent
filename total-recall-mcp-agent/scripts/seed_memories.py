@@ -37,7 +37,7 @@ async def seed_memories() -> None:
 
         for item in SAMPLE_MEMORIES:
             remembered = await service.remember(
-            principal_id="local-test-user",
+                principal_id="local-test-user",
                 kind=item["kind"],
                 content=item["content"],
                 metadata=item["metadata"],

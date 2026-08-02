@@ -8,8 +8,8 @@ checked first so demos keep working even if GitHub is unreachable.
 """
 
 import hashlib
-from http import HTTPStatus
 import time
+from http import HTTPStatus
 
 import httpx
 
