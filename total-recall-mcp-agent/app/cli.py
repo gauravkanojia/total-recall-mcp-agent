@@ -120,11 +120,7 @@ def _run_http(server, args) -> None:
             hint="Set HTTP_AUTH_MODE=github (or static) before public deployment.",
         )
 
-    app = (
-        server.streamable_http_app()
-        if args.transport == "streamable-http"
-        else server.sse_app()
-    )
+    app = server.streamable_http_app() if args.transport == "streamable-http" else server.sse_app()
     app.add_middleware(BearerAuthMiddleware)
 
     uvicorn.run(

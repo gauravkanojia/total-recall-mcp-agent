@@ -22,10 +22,7 @@ def _require_tls_in_production() -> None:
     Refuse to boot production against a non-TLS database URL.
     """
 
-    if (
-        settings.ENVIRONMENT == "production"
-        and "sslmode=verify-full" not in settings.DATABASE_URL
-    ):
+    if settings.ENVIRONMENT == "production" and "sslmode=verify-full" not in settings.DATABASE_URL:
         raise RuntimeError(
             "ENVIRONMENT=production requires DATABASE_URL with sslmode=verify-full "
             "(TLS with certificate verification)."
