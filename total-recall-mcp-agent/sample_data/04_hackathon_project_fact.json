@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User is building Total Recall MCP, a hackathon project that gives AI agents durable memory backed by CockroachDB and AWS.",
+      "kind": "fact",
+      "metadata": { "topic": "project" }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "Follow up: rotate or revoke the demo GitHub PAT after recording the hackathon submission video.",
+      "kind": "task",
+      "metadata": { "topic": "security", "priority": "high" }
+    }
+  }
+}

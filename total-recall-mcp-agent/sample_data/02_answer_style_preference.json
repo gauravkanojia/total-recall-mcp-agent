@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User prefers concise, bullet-point answers over long paragraphs of explanation.",
+      "kind": "preference",
+      "metadata": { "topic": "communication" }
+    }
+  }
+}

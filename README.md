@@ -7,6 +7,8 @@ This repository contains **Total Recall MCP** (`total-recall-mcp-agent/`), an MC
 
 The agent treats the database as the source of truth: every tool invocation is audited in a transaction, user context is scoped per principal, and semantic memories are stored with vector embeddings for similarity search across a distributed CockroachDB cluster.
 
+**→ For project setup, running locally, testing, AWS deployment, and validating the live deployment, see [`total-recall-mcp-agent/README.md`](total-recall-mcp-agent/README.md).**
+
 ---
 
 ## What this project does
@@ -86,60 +88,6 @@ flowchart TB
 
 ---
 
-## Setup
-
-**Prerequisites:** Python 3.14+, [uv](https://docs.astral.sh/uv/), Docker or Podman (for local CockroachDB).
-
-```bash
-cd total-recall-mcp-agent
-cp app/.env.example .env
-uv sync
-docker compose up -d
-uv run alembic upgrade head
-uv run python scripts/seed_memories.py    # optional demo data
-uv run total-recall-mcp-agent             # stdio MCP for Cursor / Claude Desktop
-```
-
-```bash
-# Verify the memory tools end-to-end
-chmod +x scripts/demo_memory.sh
-./scripts/demo_memory.sh
-
-# Run tests
-uv run pytest
-```
-
-This gets you a local, unauthenticated stdio server backed by a local CockroachDB. For HTTP mode, CockroachDB Cloud setup, AWS deployment, authentication modes, and everything CockroachDB/AWS-specific, see the full guide:
-
-**→ [`total-recall-mcp-agent/README.md`](total-recall-mcp-agent/README.md)**
-
----
-
-## Application structure
-
-```
-total-recall-mcp-agent/          # repo root
-└── total-recall-mcp-agent/      # the MCP agent project
-    ├── app/
-    │   ├── cli.py              # MCP entry: stdio (default) or --transport streamable-http
-    │   ├── bootstrap.py        # Single tool-registration path
-    │   ├── tools/              # MCP tool handlers (health, users, memory)
-    │   ├── mcp/                # Registry, bridge, executor, server (/health route)
-    │   ├── services/           # MemoryService (embed + persist/search)
-    │   ├── repositories/       # MemoryRepository, AuditRepository
-    │   ├── database/models/    # User, AuditLog, Memory (VECTOR column)
-    │   └── clients/            # Bedrock + embedding providers
-    ├── migrations/             # Alembic schema (users, audit_logs, memories + vector index)
-    ├── terraform/              # AWS ECS Fargate dev stack
-    ├── scripts/                # seed, demo, ccloud, skills install helpers
-    ├── .agents/skills/         # CockroachDB Agent Skills + project skill
-    ├── tests/                  # pytest (memory service + MCP integration)
-    ├── docker-compose.yml      # Local CockroachDB + optional mcp-agent service
-    └── Dockerfile              # Container image for ECS / Compose
-```
-
----
-
 ## Hackathon compliance summary
 
 | Requirement | Status |
@@ -153,18 +101,10 @@ Full breakdown of which CockroachDB components, AWS services, and Agent Skills a
 
 ---
 
-## Submission narrative (for Devpost)
-
-> **Total Recall MCP** gives AI agents durable memory through CockroachDB. Semantic memories are embedded with **Amazon Bedrock** (Titan v2), stored in a `memories` table with a **distributed vector index**, and recalled via cosine similarity — all scoped per caller and fully audited. In production the agent runs on **Amazon ECS Fargate** behind an ALB. Developers use stdio MCP in Cursor, inspect clusters via the **Cloud Managed MCP Server**, automate ops with the **ccloud CLI**, and apply **CockroachDB Agent Skills** for schema, transaction, and health expertise.
-
-**CockroachDB tools used:** Distributed Vector Indexing · Cloud Managed MCP Server · ccloud CLI · Agent Skills
-**AWS services used:** Amazon Bedrock · Amazon ECS Fargate · ALB · Secrets Manager · CloudWatch Logs · IAM
-
----
-
 ## Contributors
 
 - Gaurav Kanojia
+- Shipra Yadav
 
 ## License
 

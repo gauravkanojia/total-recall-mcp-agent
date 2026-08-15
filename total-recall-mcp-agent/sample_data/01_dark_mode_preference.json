@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User prefers dark mode in every application and IDE they use.",
+      "kind": "preference",
+      "metadata": { "topic": "ui" }
+    }
+  }
+}

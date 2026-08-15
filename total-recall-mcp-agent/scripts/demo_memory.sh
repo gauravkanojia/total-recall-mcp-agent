@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# End-to-end semantic memory demo over MCP stdio.
+# End-to-end semantic memory demo over MCP — local stdio or live cloud HTTP.
 #
-# Exercises the full memory lifecycle against a fresh agent process per call
-# (simple, portable — no bash4 coproc dependency):
+# Exercises the full memory lifecycle:
 #   1. remember_memory  — store a memory
 #   2. recall_memory    — find it again via vector search
 #   3. list_memories    — see it in the caller's memory list
@@ -12,14 +11,76 @@
 #   5. list_memories    — confirm it's gone
 #
 # Every step logs with a uniform [HH:MM:SS] LEVEL prefix. Any tool error
-# aborts the script with a non-zero exit code (the original version had no
-# failure detection at all — a failed tool call just printed like anything
-# else and the script exited 0 regardless).
+# aborts the script with a non-zero exit code. Run with -h/--help for usage.
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/demo_memory.sh [local|cloud] [options]
+
+Modes:
+  local   (default) stdio MCP against a fresh local agent process per call
+          (DATABASE_URL from .env). No network dependency beyond CockroachDB.
+  cloud   Streamable HTTP MCP against a deployed AWS ALB endpoint, with
+          GitHub bearer auth (HTTP_AUTH_MODE=github). Requires --endpoint.
+
+Options (cloud mode):
+  --endpoint URL   REQUIRED. The MCP endpoint base URL to test — this
+                   script does not know or guess it. Get yours from project
+                   submission details
+  --token TOKEN    Bearer token. Default: $TOKEN, or auto-fetched via
+                   ./scripts/get_github_token.sh if `gh` is installed.
+
+Examples:
+  ./scripts/demo_memory.sh                                    # local (default)
+  ./scripts/demo_memory.sh local
+  ./scripts/demo_memory.sh cloud --endpoint http://<your-alb-dns-name>
+  ./scripts/demo_memory.sh cloud --endpoint http://<your-alb-dns-name> --token ghp_xxx
+EOF
+}
+
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-UV_BIN="${UV_BIN:-$(command -v uv)}"
-RESPONSE_WAIT="${RESPONSE_WAIT:-4}"   # seconds to let the agent answer after sending a call
+UV_BIN="${UV_BIN:-$(command -v uv || true)}"
+RESPONSE_WAIT="${RESPONSE_WAIT:-4}"    # stdio mode: seconds to let the agent answer after sending a call
+HTTP_TIMEOUT="${HTTP_TIMEOUT:-15}"     # cloud mode: curl --max-time per call
+
+MODE="local"
+ENDPOINT_OVERRIDE=""
+TOKEN_OVERRIDE=""
+
+case "${1:-}" in
+  local|cloud)
+    MODE="$1"
+    shift
+    ;;
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --endpoint)
+      ENDPOINT_OVERRIDE="${2:?--endpoint requires a URL}"
+      shift 2
+      ;;
+    --token)
+      TOKEN_OVERRIDE="${2:?--token requires a value}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
 
 # ---------------------------------------------------------------------------
 # Uniform logging — [HH:MM:SS] LEVEL message. Colors auto-disable when not
@@ -53,29 +114,60 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Preflight
 # ---------------------------------------------------------------------------
-log_step "Preflight checks"
-
-[[ -n "${UV_BIN}" ]] || fail "uv not found in PATH. Install: https://docs.astral.sh/uv/"
-log_ok "uv found: ${UV_BIN}"
+log_step "Preflight checks (mode: ${MODE})"
 
 [[ -f "${PROJECT_ROOT}/pyproject.toml" ]] || fail "pyproject.toml not found under ${PROJECT_ROOT} — is this script in scripts/ of the project?"
 log_ok "project root: ${PROJECT_ROOT}"
 
-if [[ -f "${PROJECT_ROOT}/.env" ]]; then
-  log_ok ".env found"
+if [[ "${MODE}" == "local" ]]; then
+  [[ -n "${UV_BIN}" ]] || fail "uv not found in PATH. Install: https://docs.astral.sh/uv/"
+  log_ok "uv found: ${UV_BIN}"
+
+  if [[ -f "${PROJECT_ROOT}/.env" ]]; then
+    log_ok ".env found"
+  else
+    log_warn ".env not found — the agent will fail unless DATABASE_URL is set another way"
+  fi
 else
-  log_warn ".env not found — the agent will fail unless DATABASE_URL is set another way"
+  command -v curl >/dev/null 2>&1 || fail "curl not found in PATH"
+
+  [[ -n "${ENDPOINT_OVERRIDE}" ]] || fail "cloud mode requires --endpoint <url> (get yours from submission details)."
+  MCP_ENDPOINT_URL="${ENDPOINT_OVERRIDE%/mcp}"
+  MCP_ENDPOINT_URL="${MCP_ENDPOINT_URL%/}"
+  log_ok "cloud endpoint: ${MCP_ENDPOINT_URL}"
+
+  TOKEN="${TOKEN_OVERRIDE:-${TOKEN:-}}"
+  if [[ -z "${TOKEN}" ]]; then
+    if [[ -x "${PROJECT_ROOT}/scripts/get_github_token.sh" ]] && command -v gh >/dev/null 2>&1; then
+      log_info "no --token given — fetching one via scripts/get_github_token.sh"
+      TOKEN="$("${PROJECT_ROOT}/scripts/get_github_token.sh" 2>/dev/null || true)"
+    fi
+  fi
+  [[ -n "${TOKEN}" ]] || fail "No bearer token found. Pass --token <token>, set \$TOKEN, or install gh so scripts/get_github_token.sh can fetch one."
+  log_ok "bearer token acquired"
+
+  health_code="$(curl -s -X GET -o /dev/null -w '%{http_code}' --max-time "${HTTP_TIMEOUT}" "${MCP_ENDPOINT_URL}/health" || echo "000")"
+  [[ "${health_code}" == "200" ]] || fail "${MCP_ENDPOINT_URL}/health returned ${health_code} — is the deployment up?"
+  log_ok "endpoint healthy"
 fi
 
 # ---------------------------------------------------------------------------
-# mcp_call NAME METHOD PARAMS_JSON
+# mcp_call NAME TOOL PARAMS_JSON
 #
-# Runs one MCP tools/call in a fresh stdio agent process, logs the outcome,
-# and sets:
+# Dispatches to the stdio or HTTP implementation based on $MODE, logs the
+# outcome, and sets:
 #   LAST_RESULT_JSON  — the "result" object as compact JSON (empty on failure)
 #   LAST_CALL_OK      — "true" / "false"
 # ---------------------------------------------------------------------------
 mcp_call() {
+  if [[ "${MODE}" == "cloud" ]]; then
+    mcp_call_http "$@"
+  else
+    mcp_call_stdio "$@"
+  fi
+}
+
+mcp_call_stdio() {
   local name="$1" tool="$2" params="$3"
   local err_log
   err_log="$(mktemp)"
@@ -120,6 +212,65 @@ for line in sys.stdin:
     return 1
   fi
   rm -f "${err_log}"
+
+  _finish_mcp_call "${name}" "${output}"
+}
+
+mcp_call_http() {
+  local name="$1" tool="$2" params="$3"
+
+  log_step "${name}"
+  log_info "tool=${tool} args=${params} endpoint=${MCP_ENDPOINT_URL}/mcp"
+
+  local body raw
+  body="{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"${tool}\",\"arguments\":${params}}}"
+  raw="$(
+    curl -sS -X POST --max-time "${HTTP_TIMEOUT}" "${MCP_ENDPOINT_URL}/mcp" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -H "Authorization: Bearer ${TOKEN}" \
+      -d "${body}"
+  )" || true
+
+  # Streamable HTTP responses are SSE ("event: message\ndata: {...}"); pull
+  # the JSON-RPC result out regardless of whether it's wrapped in SSE or
+  # returned as a bare JSON body.
+  local output
+  output=$(python3 -c '
+import json, sys
+raw = sys.stdin.read()
+payload = None
+for line in raw.splitlines():
+    line = line.strip()
+    if line.startswith("data:"):
+        line = line[len("data:"):].strip()
+    if not line:
+        continue
+    try:
+        msg = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if msg.get("id") == 2:
+        payload = msg.get("result", msg.get("error", {}))
+if payload is not None:
+    print(json.dumps(payload))
+' <<<"${raw}")
+
+  if [[ -z "${output}" ]]; then
+    log_error "${name}: no usable response from ${MCP_ENDPOINT_URL}/mcp"
+    log_error "--- raw response ---"
+    printf '%s\n' "${raw}" >&2
+    LAST_RESULT_JSON=""
+    LAST_CALL_OK=false
+    return 1
+  fi
+
+  _finish_mcp_call "${name}" "${output}"
+}
+
+# Shared success/error handling for both transports.
+_finish_mcp_call() {
+  local name="$1" output="$2"
 
   if [[ "${output}" == *'"isError": true'* || "${output}" == *'"isError":true'* ]]; then
     log_error "${name}: tool returned an error"
@@ -190,8 +341,12 @@ print(found or "")
 ' <<<"${1}"
 }
 
-echo "=== Total Recall MCP — memory lifecycle demo ==="
-echo "Each MCP call below spawns a fresh stdio agent process; ${RESPONSE_WAIT}s is allowed for a reply."
+echo "=== Total Recall MCP — memory lifecycle demo (${MODE}) ==="
+if [[ "${MODE}" == "cloud" ]]; then
+  echo "Each MCP call below is an authenticated HTTP request to ${MCP_ENDPOINT_URL}/mcp."
+else
+  echo "Each MCP call below spawns a fresh stdio agent process; ${RESPONSE_WAIT}s is allowed for a reply."
+fi
 
 # ---------------------------------------------------------------------------
 # 1. Remember
@@ -250,4 +405,4 @@ echo "=== Verify in CockroachDB (optional) ==="
 echo "SELECT kind, content, principal_id FROM memories ORDER BY created_at DESC LIMIT 5;"
 echo "SELECT tool_name, status, principal_id FROM audit_logs ORDER BY created_at DESC LIMIT 10;"
 
-log_ok "Demo complete."
+log_ok "Demo complete (${MODE})."

@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User's primary programming language is Python, with occasional Go for CLI tooling.",
+      "kind": "fact",
+      "metadata": { "topic": "skills" }
+    }
+  }
+}

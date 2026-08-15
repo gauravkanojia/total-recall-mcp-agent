@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "Review the Terraform runtime_platform (ARM64/Graviton) fix before the next ECS deploy — images built natively on Apple Silicon are arm64.",
+      "kind": "note",
+      "metadata": { "topic": "infra" }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User prefers CockroachDB Serverless over Dedicated for demo and trial workloads, to keep costs predictable and avoid idle spend.",
+      "kind": "preference",
+      "metadata": { "topic": "cockroachdb" }
+    }
+  }
+}
