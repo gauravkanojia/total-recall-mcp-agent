@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "When HTTP_AUTH_MODE=github, the caller's GitHub login becomes their principal id (github:<login>) for memory scoping.",
+      "kind": "fact",
+      "metadata": { "topic": "auth" }
+    }
+  }
+}

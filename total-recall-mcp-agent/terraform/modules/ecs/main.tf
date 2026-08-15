@@ -156,6 +156,14 @@ resource "aws_ecs_task_definition" "this" {
   execution_role_arn       = var.execution_role_arn
   task_role_arn            = var.task_role_arn
 
+  # Images built natively on Apple Silicon (Podman/Docker Desktop) are
+  # arm64. Fargate defaults to X86_64, which fails at container start with
+  # "exec format error" against an arm64 image — pin to Graviton instead.
+  runtime_platform {
+    cpu_architecture        = "ARM64"
+    operating_system_family = "LINUX"
+  }
+
   container_definitions = jsonencode([
     {
       name      = "mcp-agent"

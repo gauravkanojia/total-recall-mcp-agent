@@ -129,6 +129,49 @@ MCP client → ALB → ECS Fargate → Amazon Bedrock (embed) → CockroachDB (s
 
 ---
 
+## Application structure
+
+```
+app/
+├── auth/                     # GitHub PAT validation (github.py) + bearer-auth middleware
+├── clients/                  # aws.py (boto3 Bedrock client), embeddings.py (providers)
+├── core/                     # config.py (Settings), logging.py (structlog)
+├── database/
+│   ├── models/               # User, AuditLog, Memory (VECTOR column) SQLAlchemy models
+│   ├── database.py           # Async engine + sslmode → asyncpg ssl translation
+│   └── session.py            # Session factory
+├── identity/                 # Principal resolution
+├── mcp/                      # FastMCP server, registry, bridge, executor, session context
+├── repositories/             # MemoryRepository, AuditRepository, UserRepository
+├── schemas/                  # Pydantic request/response schemas
+├── services/                 # MemoryService (embed + persist/search), UserService
+├── tools/                    # MCP tool handlers (health, memory, users)
+├── bootstrap.py              # Single tool-registration path
+├── cli.py                    # MCP entry: stdio (default) or --transport streamable-http
+├── mcp-dev.json              # Local stdio MCP client config template
+├── mcp-cloud.example.json    # CockroachDB Cloud MCP client config template
+└── .env.example              # Env var template
+migrations/                   # Alembic schema (users, audit_logs, memories + vector index)
+sample_data/                  # Ready-to-POST remember_memory payloads for judges
+scripts/                      # seed, demo (local/cloud), deploy, ccloud, skills install, token helpers
+terraform/
+├── environments/dev/         # Deployable dev stack (terraform.tfvars.example only — no real secrets committed)
+├── environments/stage/       # Stage environment scaffold
+└── modules/                  # ecs, iam, network, secrets
+tests/                        # pytest (unit + MCP integration)
+.agents/skills/               # CockroachDB Agent Skills + project skill
+docker-compose.yml            # Local 3-node CockroachDB + optional mcp-agent service
+Dockerfile                    # Container image for ECS / Compose
+```
+
+### Tech stack
+
+- **Python 3.14**, **MCP SDK** (`mcp` / FastMCP with Starlette for HTTP transport)
+- **SQLAlchemy 2** (async) + **Alembic**
+- **boto3** for Bedrock Runtime
+- **structlog** (stderr logging — stdout reserved for MCP JSON-RPC)
+- **pytest** + **ruff**
+
 ## Prerequisites
 
 | Tool | Local | AWS deploy |
@@ -145,19 +188,20 @@ MCP client → ALB → ECS Fargate → Amazon Bedrock (embed) → CockroachDB (s
 ## Local setup
 
 ```bash
-cd total-recall-mcp-agent
 cp app/.env.example .env
 uv sync
 docker compose up -d
+# OR
+podman compose up -d
 uv run alembic upgrade head
 uv run python scripts/seed.py           # optional test user
 uv run python scripts/seed_memories.py  # optional demo memories
 ```
 
-Default `.env` values work with Docker Compose Cockroach:
+Default `app/.env.example` values work with Docker/Podman Compose Cockroach (host port `26260` maps to the container's `26257`, per `docker-compose.yml`):
 
 ```env
-DATABASE_URL=cockroachdb+asyncpg://root@localhost:26257/total_recall_mcp_db
+DATABASE_URL=cockroachdb+asyncpg://root@localhost:26260/total_recall_mcp_db
 DATABASE_NAME=total_recall_mcp_db
 EMBEDDING_PROVIDER=fake
 ```
@@ -240,6 +284,67 @@ FROM audit_logs ORDER BY created_at DESC LIMIT 5;
 SELECT kind, content, principal_id AS principal_id
 FROM memories ORDER BY created_at DESC LIMIT 5;
 ```
+
+---
+
+## Validate from cloud
+
+Exercises the live AWS deployment end-to-end: ALB → ECS Fargate → GitHub-authenticated `/mcp` → CockroachDB Cloud. Requires the stack to already be deployed (see [AWS deployment](#aws-deployment)).
+
+**Get the ALB endpoint:**
+
+```bash
+MCP_ENDPOINT_URL="$(terraform -chdir=terraform/environments/dev output -raw mcp_endpoint_url | sed 's|/mcp$||')"
+```
+
+**Health / readiness (no auth required):**
+
+```bash
+curl -s "${MCP_ENDPOINT_URL}/health"
+curl -s "${MCP_ENDPOINT_URL}/ready"     # verifies live DB connectivity, not just liveness
+```
+
+**Get a bearer token** (`HTTP_AUTH_MODE=github` on the deployed task — see [Authentication & security](#authentication--security)):
+
+```bash
+TOKEN="$(./scripts/get_github_token.sh)"
+```
+
+**Call MCP tools against the live endpoint:**
+
+```bash
+# List available tools
+curl -s "${MCP_ENDPOINT_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Remember a memory
+curl -s "${MCP_ENDPOINT_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"remember_memory","arguments":{"content":"Cloud validation test","kind":"fact"}}}'
+
+# Recall it back (vector search) — grab the "id" from the previous response first
+curl -s "${MCP_ENDPOINT_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"recall_memory","arguments":{"query":"cloud validation","limit":5}}}'
+
+# Clean up
+curl -s "${MCP_ENDPOINT_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"forget_memory","arguments":{"memory_id":"<id-from-remember-response>"}}}'
+```
+
+A `401 {"error":"missing_bearer_token"}` on any `/mcp` call without `Authorization` confirms auth is being enforced, not bypassed.
+
+For ready-made request bodies instead of typing these by hand, see [`sample_data/`](sample_data/) — ten `remember_memory` payloads across varied `kind`s, plus `recall_memory`/`list_memories` examples to get them back.
 
 ---
 
@@ -342,6 +447,15 @@ aws logs tail /ecs/total-recall-mcp-agent-dev --follow --region us-east-1
 - **`static`** — only `MCP_STATIC_TOKENS` (`token:principal` pairs) are accepted; used by `docker-compose.yml` to demo two isolated memory spaces (`demo-token-alice` / `demo-token-bob`).
 - **`off`** — local development only; the server logs a warning at startup.
 
+**Getting a token to test the `github` mode:**
+
+```bash
+./scripts/get_github_token.sh          # opens a browser to sign in via GitHub CLI
+TOKEN=$(./scripts/get_github_token.sh) # or capture it directly
+```
+
+Requires [`gh`](https://cli.github.com). This is the fast path for judges/evaluators — it prints a ready-to-use bearer token after a one-click browser authorization. Note it carries `gh`'s standard OAuth scopes (`repo`, `read:org`, `gist`, `workflow`), since the GitHub CLI doesn't support requesting an empty scope set — broader than the zero-scope PAT above, though equally sufficient for the identity check this agent performs. For a token that provably can't do anything beyond prove identity, create a fine-grained PAT with zero permissions by hand instead, at `github.com/settings/personal-access-tokens/new`.
+
 Security properties, enforced in code:
 
 - **Tenant isolation** — every memory read/write is scoped by `principal_id` in the repository layer; the vector index leads with `(principal_id, kind)`, so similarity search never crosses callers.
@@ -356,25 +470,6 @@ Known demo limitation: the ALB listener is HTTP (no custom domain/ACM cert), so 
 
 ---
 
-## Project structure
-
-```
-app/           # MCP agent (tools, services, repositories, models)
-scripts/       # seed, demo, deploy, ccloud, skills install helpers
-migrations/    # Alembic (users, audit_logs, memories + vector index)
-terraform/     # AWS deployment stack
-.agents/skills/# CockroachDB Agent Skills + project skill
-tests/         # pytest suite
-```
-
-### Tech stack
-
-- **Python 3.14**, **MCP SDK** (`mcp` / FastMCP with Starlette for HTTP transport)
-- **SQLAlchemy 2** (async) + **Alembic**
-- **boto3** for Bedrock Runtime
-- **structlog** (stderr logging — stdout reserved for MCP JSON-RPC)
-- **pytest** + **ruff**
-
 ## Tests & lint
 
 ```bash
@@ -383,10 +478,11 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-## License
-
-MIT — see [LICENSE](../LICENSE)
-
 ## Contributors
 
 - Gaurav Kanojia
+- Shipra Yadav
+
+## License
+
+MIT — see [LICENSE](../LICENSE)

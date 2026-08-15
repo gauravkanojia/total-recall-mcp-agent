@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "User's timezone is US Eastern (America/New_York); schedule demos and reviews accordingly.",
+      "kind": "fact",
+      "metadata": { "topic": "scheduling" }
+    }
+  }
+}

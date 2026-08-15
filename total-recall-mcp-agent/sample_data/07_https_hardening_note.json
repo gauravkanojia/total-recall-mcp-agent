@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "remember_memory",
+    "arguments": {
+      "content": "The ALB listener currently serves plain HTTP; attach an ACM certificate and HTTPS listener before treating this as a real production deployment.",
+      "kind": "note",
+      "metadata": { "topic": "security" }
+    }
+  }
+}
